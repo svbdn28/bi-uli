@@ -32,6 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +62,8 @@ fun RoundEndScreen(vm: AppViewModel) {
     val ratio = s.score.toFloat() / s.total
     val good = ratio >= 0.8f
     val readiness = (Srs.readiness(vm.ids, vm.progress) * 100).roundToInt()
+    val chance = Srs.passChance(vm.ids, vm.progress)
+    val likely = chance >= Srs.LIKELY_PASS
     val mastered = Srs.masteredCount(vm.ids, vm.progress)
 
     val list = rememberLazyListState()
@@ -85,13 +90,7 @@ fun RoundEndScreen(vm: AppViewModel) {
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        when {
-                            s.mistakes.isEmpty() && s.kind == RoundKind.Mistakes ->
-                                "Všetko na prvý pokus. Z Chýb zmiznú, keď ich trafíš aj neskôr: o 10 minút a potom o 4 hodiny."
-                            s.mistakes.isEmpty() -> "Všetko na prvý pokus."
-                            s.kind == RoundKind.Mistakes -> "Opravené. Tieto otázky sa ti vrátia o 10 minút."
-                            else -> "Chyby si hneď opravil. Vrátia sa ti o 10 minút, kým sa neusadia."
-                        },
+                        roundEndNote(s.kind, s.ids, s.mistakes, vm.progress, vm.clock()),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -114,8 +113,8 @@ fun RoundEndScreen(vm: AppViewModel) {
                         Stat(
                             value = "$readiness %",
                             label = "odhad na skúške",
-                            detail = if (readiness >= 80) "nad hranicou 80 %" else "hranica je 80 %",
-                            color = if (readiness >= 80) c.right else MaterialTheme.colorScheme.onSurface,
+                            detail = "šanca prejsť ${chanceText(chance)}",
+                            color = if (likely) c.right else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -136,15 +135,21 @@ fun RoundEndScreen(vm: AppViewModel) {
         }
         if (good) Celebration(vm.shotMode, Modifier.align(Alignment.TopCenter).padding(top = top + 24.dp))
         StatusBarScrim(list.canScrollBackward)
+        val more = rememberMoreBelow(list)
+        val scope = rememberCoroutineScope()
         BottomActions(
             primary = "Ďalšie kolo",
             onPrimary = vm::startRound,
             secondary = "Domov",
             onSecondary = vm::home,
             modifier = Modifier.align(Alignment.BottomCenter),
+            onMore = if (more) ({ scope.launch { list.animateScrollBy(list.layoutInfo.viewportSize.height * 0.6f) } }) else null,
         )
     }
 }
+
+/** The score sun: big enough to celebrate, small enough that two review cards fit above the actions. */
+private val BADGE = 172.dp
 
 @Composable
 private fun ScoreBadge(score: Int, total: Int, good: Boolean) {
@@ -153,7 +158,7 @@ private fun ScoreBadge(score: Int, total: Int, good: Boolean) {
     val scale = remember { Animatable(0.4f) }
     LaunchedEffect(Unit) { spin.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 90f)) }
     LaunchedEffect(Unit) { scale.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 260f)) }
-    Box(Modifier.size(200.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(BADGE).graphicsLayer { scaleX = scale.value; scaleY = scale.value }, contentAlignment = Alignment.Center) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -166,8 +171,8 @@ private fun ScoreBadge(score: Int, total: Int, good: Boolean) {
                 "$score",
                 fontFamily = Rounded,
                 fontWeight = FontWeight.W900,
-                fontSize = 76.sp,
-                lineHeight = 76.sp,
+                fontSize = 68.sp,
+                lineHeight = 68.sp,
                 color = if (good) c.onAmber else MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Text(
@@ -202,11 +207,11 @@ private fun Celebration(frozen: Boolean, modifier: Modifier) {
     val scheme = MaterialTheme.colorScheme
     val colors = listOf(c.amber, c.right, scheme.tertiary, c.learning, scheme.primary, c.wrong)
     val shapes = listOf(Shapes.sunny, Shapes.clover4, Shapes.cookie6, Shapes.gem, Shapes.flower, Shapes.pill)
-    Box(modifier.size(200.dp)) {
+    Box(modifier.size(BADGE)) {
         for (i in 0 until 18) {
             // Fan out over the upper arc from the badge's rim, then fall a little.
             val angle = 200.0 + i * (140.0 / 17) + (i % 3) * 4.0
-            val dist = 92 + (40 + (i % 4) * 22) * t.value
+            val dist = 80 + (40 + (i % 4) * 22) * t.value
             val rad = Math.toRadians(angle)
             val x = (cos(rad) * dist).toFloat()
             val y = (sin(rad) * dist).toFloat() + 60f * t.value * t.value

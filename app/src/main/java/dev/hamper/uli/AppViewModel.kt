@@ -1,6 +1,9 @@
 package dev.hamper.uli
 
 import android.app.Application
+import android.util.Log
+import android.widget.Toast
+import androidx.lifecycle.SavedStateHandle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,6 +11,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hamper.uli.data.FileProgressStore
 import dev.hamper.uli.data.FileSessionStore
+import dev.hamper.uli.data.Loaded
 import dev.hamper.uli.data.MemorySessionStore
 import dev.hamper.uli.data.SavedSession
 import dev.hamper.uli.data.SessionStore
@@ -21,11 +25,12 @@ import dev.hamper.uli.engine.Question
 import dev.hamper.uli.engine.Round
 import dev.hamper.uli.engine.Srs
 import dev.hamper.uli.engine.Topic
-import dev.hamper.uli.engine.isCorrect
+import dev.hamper.uli.engine.Options
 import dev.hamper.uli.engine.result
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
@@ -50,6 +55,8 @@ data class QuizState(
     val selected: Set<Int> = emptySet(),
     val answered: Boolean = false,
     val correct: Boolean = false,
+    /** [ProgressData.seq] when this question came up: a higher count there means its answer is already in. */
+    val seq: Long = 0,
 )
 
 @Serializable
@@ -61,6 +68,7 @@ data class ExamState(
 
 data class RoundSummary(
     val kind: RoundKind,
+    val ids: List<Int>,
     val score: Int,
     val total: Int,
     val mistakes: List<Int>,
@@ -72,7 +80,7 @@ data class ExamSummary(val result: ExamResult, val exam: Exam) {
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class AppViewModel(app: Application) : AndroidViewModel(app) {
+class AppViewModel(app: Application, private val handle: SavedStateHandle) : AndroidViewModel(app) {
     val questions: List<Question> = app.assets.open("questions.json").use { Content.parse(it.readBytes().decodeToString()) }
     val byId: Map<Int, Question> = questions.associateBy { it.id }
     val ids: List<Int> = questions.map { it.id }
@@ -85,7 +93,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var clock: () -> Long = System::currentTimeMillis
         private set
 
-    var progress by mutableStateOf(store.load())
+    var progress by mutableStateOf(ProgressData())
         private set
     var screen by mutableStateOf<Screen>(Screen.Home)
         private set
@@ -98,6 +106,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var examSummary by mutableStateOf<ExamSummary?>(null)
         private set
 
+    /** The last finished exam, saved with the session so its review survives a killed process. */
+    private var lastExam: Exam? = null
+
+    /**
+     * progress.json could not be read: it is backed up, the app runs on empty progress in memory, and the
+     * file is not overwritten until the user says so on Domov.
+     */
+    var damagedProgress by mutableStateOf<Loaded.Corrupt?>(null)
+        private set
+
     /** Screenshot session: one-shot effects render a fixed frame so captures are repeatable. */
     var shotMode by mutableStateOf(false)
         private set
@@ -105,31 +123,121 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Boxes at the start of the round, to count what got newly mastered. */
     private var roundStart: Map<Int, Int> = emptyMap()
 
+    private var toldAboutWriteError = false
+
     init {
+        val loaded = store.load()
+        val readable = when (loaded) {
+            is Loaded.Ok -> { progress = loaded.data; true }
+            Loaded.Missing -> true
+            is Loaded.Corrupt -> {
+                Log.e(TAG, "progress.json unreadable, backed up to ${loaded.backup}", loaded.error)
+                damagedProgress = loaded
+                false
+            }
+        }
         // An open round or exam survives a killed process; Domov offers to continue it.
-        val saved = sessionStore.load()
-        fun known(list: List<Int>) = list.isNotEmpty() && list.all { it in byId }
-        quiz = saved.quiz?.takeIf { known(it.round.queue) && !it.round.isFinished }
-        roundStart = if (quiz != null) saved.roundStartBoxes else emptyMap()
-        exam = saved.exam?.takeIf { known(it.exam.ids) && !it.exam.isFinished }
+        val saved = when (val s = sessionStore.load()) {
+            is Loaded.Ok -> s.data
+            Loaded.Missing -> SavedSession()
+            is Loaded.Corrupt -> {
+                Log.w(TAG, "session.json unreadable, dropped (copy at ${s.backup})", s.error)
+                SavedSession()
+            }
+        }
+        val r = Flow.restore(saved, progress, byId, catchUp = readable)
+        quiz = r.quiz
+        roundStart = r.roundStart
+        exam = r.exam
+        lastExam = r.lastExam
+        examSummary = r.lastExam?.let { ExamSummary(it.result(byId), it) }
+        progress = r.progress
+        if (r.progressChanged) write(progress = progress)
+        // Back on the screen the process died on, when there is still something to show there.
+        screen = when (val key = handle.get<String>(SCREEN_KEY)) {
+            "quiz" -> if (quiz != null) Screen.Quiz else Screen.Home
+            "exam" -> if (exam != null) Screen.ExamRun else Screen.Home
+            "exam-end" -> if (examSummary != null) Screen.ExamEnd else Screen.Home
+            else -> if (key != null && key.startsWith("browse")) {
+                Screen.Browse(Topic.entries.firstOrNull { it.key == key.substringAfter(":", "") })
+            } else {
+                Screen.Home
+            }
+        }
     }
 
-    private fun saveSession() {
-        if (shotMode) return
-        val data = SavedSession(quiz = quiz, roundStartBoxes = roundStart, exam = exam)
-        val s = sessionStore
-        viewModelScope.launch(io) { s.save(data) }
+    private fun go(to: Screen) {
+        screen = to
+        handle[SCREEN_KEY] = when (to) {
+            Screen.Quiz -> "quiz"
+            Screen.ExamRun -> "exam"
+            Screen.ExamEnd -> "exam-end"
+            is Screen.Browse -> "browse:${to.topic?.key.orEmpty()}"
+            else -> "home"
+        }
     }
+
+    private fun session() = SavedSession(quiz = quiz, roundStartBoxes = roundStart, exam = exam, lastExam = lastExam)
+
+    /**
+     * One write job on the single IO lane, in the given order. Rounds save progress first (an answer that
+     * reached progress but not the session is recognised by its seq); a finished exam saves the session first
+     * (an exam that reached the session but not progress is caught up on the next start).
+     */
+    private fun write(progress: ProgressData? = null, session: SavedSession? = null, sessionFirst: Boolean = false) {
+        if (shotMode) return
+        val p = if (damagedProgress != null) null else progress
+        val ps = store
+        val ss = sessionStore
+        viewModelScope.launch(io) {
+            val steps = buildList<() -> Unit> {
+                if (p != null) add { ps.save(p) }
+                if (session != null) add { ss.save(session) }
+                if (sessionFirst) reverse()
+            }
+            for (step in steps) {
+                try {
+                    step()
+                } catch (e: Exception) {
+                    Log.e(TAG, "save failed", e)
+                    if (!toldAboutWriteError) {
+                        toldAboutWriteError = true
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(getApplication<Application>(), "Postup sa nepodarilo uložiť. Skontroluj voľné miesto v telefóne.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun saveSession() = write(session = session())
 
     private fun persist(data: ProgressData) {
         progress = data
-        val s = store
-        viewModelScope.launch(io) { s.save(data) }
+        write(progress = data)
+    }
+
+    // Damaged progress file
+
+    /** Tries progress.json again (e.g. after it was restored by hand). */
+    fun retryLoadProgress() {
+        when (val r = store.load()) {
+            is Loaded.Ok -> { progress = r.data; damagedProgress = null }
+            Loaded.Missing -> { damagedProgress = null; write(progress = progress) }
+            is Loaded.Corrupt -> damagedProgress = r
+        }
+    }
+
+    /** The user saw the warning: from now on the in-memory progress replaces the damaged file (its copy stays). */
+    fun acceptFreshProgress() {
+        damagedProgress = null
+        write(progress = progress)
     }
 
     private fun shuffledOrder(q: Question): List<Int> {
         val r = if (seededShuffle) Random(q.id * 31 + 7) else random
-        return q.options.indices.shuffled(r)
+        return Options.order(q, r)
     }
 
     // Home
@@ -148,11 +256,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleSk() = persist(progress.copy(showSk = !progress.showSk))
 
     fun resetProgress() {
-        persist(ProgressData(showSk = progress.showSk))
         quiz = null
         exam = null
+        lastExam = null
+        examSummary = null
         roundStart = emptyMap()
-        saveSession()
+        progress = ProgressData(showSk = progress.showSk)
+        // Session first: a kill in between leaves the old progress (reset again), never an old exam to replay.
+        write(progress = progress, session = session(), sessionFirst = true)
     }
 
     // Learning rounds
@@ -161,7 +272,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Domov's main button: back into the open round, or a fresh smart round. */
     fun continueOrStart() {
-        if (quiz != null) screen = Screen.Quiz else startRound()
+        if (quiz != null) go(Screen.Quiz) else startRound()
     }
 
     fun startMistakes() {
@@ -172,42 +283,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun startRound(kind: RoundKind, roundIds: List<Int>) {
         roundStart = roundIds.associateWith { progress.card(it).box }
         val round = Round(roundIds)
-        quiz = QuizState(kind = kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)))
+        quiz = QuizState(kind = kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)), seq = progress.seq)
         saveSession()
-        screen = Screen.Quiz
+        go(Screen.Quiz)
     }
 
     fun current(): Question? = quiz?.round?.current?.let(byId::get)
 
-    /** single and truefalse: one tap answers. */
-    fun pick(index: Int) {
+    /** A tap on option [index] of question [questionId]; single and truefalse answer on the tap. */
+    fun pick(questionId: Int, index: Int) {
         val s = quiz ?: return
-        if (s.answered) return
         val q = current() ?: return
-        if (q.kind == Kind.Multi) {
-            val sel = if (index in s.selected) s.selected - index else if (s.selected.size < q.choose) s.selected + index else s.selected
-            quiz = s.copy(selected = sel)
-            saveSession()
-        } else {
-            quiz = s.copy(selected = setOf(index))
-            submit()
-        }
+        val picked = Flow.pick(s, q, questionId, index) ?: return
+        quiz = picked
+        if (q.kind == Kind.Multi) saveSession() else submit(questionId)
     }
 
-    fun submit() {
+    fun submit(questionId: Int) {
         val s = quiz ?: return
         val q = current() ?: return
-        if (s.answered) return
+        if (s.answered || q.id != questionId) return
         if (q.kind == Kind.Multi && s.selected.size != q.choose) return
-        val ok = q.isCorrect(s.selected)
-        val firstAttempt = !s.round.isRetry
-        quiz = s.copy(round = s.round.answer(ok), answered = true, correct = ok)
-        val now = clock()
-        val card = progress.card(q.id)
-        // Only the first attempt in a round moves the box; corrections just mark the card as seen.
-        val updated = if (firstAttempt) Srs.answer(card, ok, now) else card.copy(lastSeenAt = now)
-        persist(progress.copy(cards = progress.cards + (q.id to updated)))
-        saveSession()
+        val (answered, updated) = Flow.submit(s, q, progress, clock())
+        quiz = answered
+        progress = updated
+        write(progress = updated, session = session())
     }
 
     fun next() {
@@ -216,12 +316,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val round = s.round.next()
         if (round.isFinished) {
             val mastered = round.ids.count { (roundStart[it] ?: 0) < Srs.MASTERED_BOX && progress.card(it).isMastered }
-            roundSummary = RoundSummary(s.kind, round.score, round.total, round.mistakes, mastered)
+            roundSummary = RoundSummary(s.kind, round.ids, round.score, round.total, round.mistakes, mastered)
             quiz = null
             roundStart = emptyMap()
-            screen = Screen.RoundEnd
+            go(Screen.RoundEnd)
         } else {
-            quiz = QuizState(kind = s.kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)))
+            quiz = QuizState(kind = s.kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)), seq = progress.seq)
         }
         saveSession()
     }
@@ -231,12 +331,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startExam() {
         val e = Exam.start(ids, clock(), random)
         exam = ExamState(e, shuffledOrder(byId.getValue(e.current!!)))
+        // A new attempt replaces the last one's review.
+        lastExam = null
+        examSummary = null
         saveSession()
-        screen = Screen.ExamRun
+        go(Screen.ExamRun)
     }
 
     fun resumeExam() {
-        if (exam != null) screen = Screen.ExamRun
+        if (exam != null) go(Screen.ExamRun)
     }
 
     fun discardExam() {
@@ -244,23 +347,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saveSession()
     }
 
-    fun examPick(index: Int) {
+    /** Leaves the exam: an attempt with no answer yet is simply dropped, anything else stays open. */
+    fun leaveExam() {
+        if ((exam?.exam?.index ?: 0) == 0) discardExam()
+        home()
+    }
+
+    fun examPick(questionId: Int, index: Int) {
         val s = exam ?: return
         val q = s.exam.current?.let(byId::get) ?: return
-        val sel = when {
-            q.kind != Kind.Multi -> setOf(index)
-            index in s.selected -> s.selected - index
-            s.selected.size < q.choose -> s.selected + index
-            else -> s.selected
-        }
-        exam = s.copy(selected = sel)
+        exam = Flow.examPick(s, q, questionId, index) ?: return
         saveSession()
     }
 
-    fun examNext() {
+    fun examNext(questionId: Int) {
         val s = exam ?: return
         val q = s.exam.current?.let(byId::get) ?: return
-        if (s.selected.size != q.choose) return
+        if (q.id != questionId || s.selected.size != q.choose) return
         val e = s.exam.answer(s.selected, clock())
         if (e.isFinished) {
             finishExam(e)
@@ -271,25 +374,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun finishExam(e: Exam) {
-        val res = e.result(byId)
-        val now = clock()
-        // The mock exam is real practice: every answer moves its card like in a round.
-        persist(Srs.applyExam(progress, e.ids, res.wrong, now))
-        examSummary = ExamSummary(res, e)
+        // The mock exam is real practice: every answer moves its card like in a round, exactly once.
+        progress = Flow.applyExam(progress, e, byId, clock())
+        examSummary = ExamSummary(e.result(byId), e)
+        lastExam = e
         exam = null
-        saveSession()
-        screen = Screen.ExamEnd
+        write(progress = progress, session = session(), sessionFirst = true)
+        go(Screen.ExamEnd)
     }
 
     // Navigation
 
     fun openBrowse(topic: Topic? = null) {
-        screen = Screen.Browse(topic)
+        go(Screen.Browse(topic))
     }
 
     /** Leaving mid-round or mid-exam keeps it open (and saved); Domov offers to continue. */
     fun home() {
-        screen = Screen.Home
+        go(Screen.Home)
     }
 
     // Debug screenshots
@@ -311,6 +413,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         sessionStore = MemorySessionStore()
         seededShuffle = true
         shotMode = true
+        damagedProgress = null
         random = Random(42)
         clock = { now }
         progress = data
@@ -325,5 +428,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     internal fun enableSeededShuffle() {
         seededShuffle = true
+    }
+
+    private companion object {
+        const val TAG = "Uli"
+        const val SCREEN_KEY = "screen"
     }
 }

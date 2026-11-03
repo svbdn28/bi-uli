@@ -73,9 +73,11 @@ object Shots {
                 val state = QuizState(RoundKind.Smart, r, vm.orderFor(q), selected = q.correctIndices.take(2).toSet())
                 vm.installShot(data, NOW, Screen.Quiz, quiz = state)
             }
+            // The two misses happened a few minutes ago, so the note says when they really come back.
             "round-end" -> vm.installShot(
-                data, NOW, Screen.RoundEnd,
-                roundSummary = RoundSummary(RoundKind.Smart, score = 8, total = 10, mistakes = listOf(67, 33), newlyMastered = 3),
+                data.copy(cards = data.cards + listOf(67, 33).associateWith { Srs.answer(data.card(it), false, NOW - 4 * MIN) }),
+                NOW, Screen.RoundEnd,
+                roundSummary = RoundSummary(RoundKind.Smart, roundIds, score = 8, total = 10, mistakes = listOf(67, 33), newlyMastered = 3),
             )
             "exam-result" -> {
                 val rnd = Random(3)
@@ -120,7 +122,7 @@ object Shots {
                     exam = ExamState(e, vm.orderFor(vm.byId.getValue(e.current!!))),
                 )
             }
-            // "q:51", "q:5:sk", "exam:41": any question unanswered, in a round or the mock exam (manual checks).
+            // "q:51", "q:5:sk", "wrong:16", "exam:41": any question unanswered, in a round or the mock exam (manual checks).
             else -> {
                 val parts = name.split(":")
                 val id = parts.getOrNull(1)?.toIntOrNull()?.takeIf { it in vm.byId }
@@ -130,6 +132,13 @@ object Shots {
                     q != null && parts[0] == "q" -> {
                         val r = Round(listOf(id) + roundIds.filter { it != id }.take(9))
                         vm.installShot(seeded, NOW, Screen.Quiz, quiz = QuizState(RoundKind.Smart, r, vm.orderFor(q)))
+                    }
+                    // "wrong:16": answered with its first wrong option, to check the feedback layout.
+                    q != null && parts[0] == "wrong" -> {
+                        val r = Round(listOf(id) + roundIds.filter { it != id }.take(9))
+                        val pick = q.options.indexOfFirst { !it.correct }
+                        val state = QuizState(RoundKind.Smart, r.answer(false), vm.orderFor(q), selected = setOf(pick), answered = true, correct = false)
+                        vm.installShot(answered(seeded, id, false), NOW, Screen.Quiz, quiz = state)
                     }
                     q != null && parts[0] == "exam" -> {
                         val ids = vm.ids.filter { it != id }.shuffled(Random(3))

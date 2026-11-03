@@ -93,6 +93,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import dev.hamper.uli.AppViewModel
 import dev.hamper.uli.QuizState
 import dev.hamper.uli.engine.Code
@@ -132,15 +134,17 @@ fun QuizScreen(vm: AppViewModel) {
             modifier = Modifier.weight(1f),
             label = "question",
         ) { state ->
-            // An outgoing question keeps rendering its own frozen state.
+            // An outgoing question keeps rendering its own frozen state; its taps name their question, so a
+            // tap that lands during the slide-out never answers the next one.
+            val qid = state.round.queue[state.round.index]
             QuestionBody(
-                q = vm.byId.getValue(state.round.queue[state.round.index]),
+                q = vm.byId.getValue(qid),
                 state = state,
                 isCurrent = state.round.index == s.round.index,
                 showSk = vm.progress.showSk,
                 onToggleSk = vm::toggleSk,
-                onPick = { i -> vm.pick(i); haptic() },
-                onSubmit = { vm.submit(); haptic() },
+                onPick = { i -> vm.pick(qid, i); haptic() },
+                onSubmit = { vm.submit(qid); haptic() },
                 onNext = vm::next,
                 frozen = vm.shotMode,
                 comesBack = if (state.answered) comesBack(vm, state) else null,
@@ -233,16 +237,19 @@ private fun QuestionBody(
     var compact by remember(q.id) { mutableStateOf(false) }
     // A right answer's verdict grows into whatever room the sheet leaves, so the win fills the frame instead
     // of a gap. Measured once, after the sheet has settled (no feedback loop), then animated into place.
-    val heroOn = answered && state.correct
+    // A wrong answer has no hero: its spare room becomes empty sheet under the why, so the options and the sheet
+    // close up under the question instead of leaving a band above the options.
+    val heroOn = answered
+    var demoOpen by remember(q.id) { mutableStateOf(false) }
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val room = remember(q.id) { IntArray(1) } // spare px under everything, as if the hero had no extra height
+    val room = remember(q.id) { IntArray(1) { Int.MIN_VALUE } } // spare px under everything, as if the hero had no extra height
     var heroTarget by remember(q.id) { androidx.compose.runtime.mutableIntStateOf(0) }
     val heroPx by androidx.compose.animation.core.animateIntAsState(
         heroTarget,
         if (frozen) tween(0) else spring(dampingRatio = 0.8f, stiffness = 300f),
         label = "hero",
     )
-    LaunchedEffect(heroOn) {
+    LaunchedEffect(heroOn, demoOpen) {
         if (!heroOn) { heroTarget = 0; return@LaunchedEffect }
         // Wait until the sheet and the options that drop out have stopped moving (the room stops changing).
         var last = Int.MIN_VALUE
@@ -251,9 +258,12 @@ private fun QuestionBody(
         while (still < 8 && frames < 150) {
             androidx.compose.runtime.withFrameNanos { }
             frames++
+            // Not laid out yet (a cold start can take a few frames): nothing to measure.
+            if (room[0] == Int.MIN_VALUE) continue
             if (room[0] == last) still++ else { still = 0; last = room[0] }
         }
-        heroTarget = room[0].coerceIn(0, with(density) { 360.dp.roundToPx() })
+        if (room[0] == Int.MIN_VALUE) return@LaunchedEffect
+        heroTarget = if (state.correct) room[0].coerceIn(0, with(density) { 360.dp.roundToPx() }) else room[0].coerceAtLeast(0)
     }
 
     // Before the answer the question card takes the spare height; after it, the feedback sheet does.
@@ -339,7 +349,17 @@ private fun QuestionBody(
                                 enter = expandVertically(motion.defaultSpatialSpec()) + fadeIn(motion.defaultEffectsSpec()),
                                 exit = shrinkVertically() + fadeOut(),
                             ) {
-                                FeedbackPanel(q = q, correct = state.correct, streak = state.round.streak, comesBack = comesBack, frozen = frozen, hero = with(density) { heroPx.toDp() }, modifier = Modifier.padding(top = 12.dp))
+                                FeedbackPanel(
+                                    q = q,
+                                    correct = state.correct,
+                                    streak = state.round.streak,
+                                    comesBack = comesBack,
+                                    frozen = frozen,
+                                    hero = with(density) { heroPx.toDp() },
+                                    demoOpen = demoOpen,
+                                    onDemoToggle = { demoOpen = !demoOpen },
+                                    modifier = Modifier.padding(top = 12.dp),
+                                )
                             }
                             if (!answered) Spacer(Modifier.height(if (multi) 8.dp else 12.dp))
                         }
@@ -349,7 +369,8 @@ private fun QuestionBody(
             ScrollEdges(
                 scroll = scroll,
                 color = if (answered) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.background,
-                onMore = if (answered) null else ({ scope.launch { scroll.animateScrollTo(scroll.maxValue) } }),
+                onMore = { scope.launch { scroll.animateScrollTo(scroll.maxValue) } },
+                moreLabel = if (answered) "Pokračuje nižšie" else "Ďalšie možnosti",
             )
         }
         // Single choice has no bottom button: the options still end above the gesture bar, never under it.
@@ -435,7 +456,7 @@ fun FillColumn(
  * bottom while there is more, and (before the answer) a pill that jumps to the remaining options.
  */
 @Composable
-fun BoxScope.ScrollEdges(scroll: ScrollState, color: Color, onMore: (() -> Unit)?) {
+fun BoxScope.ScrollEdges(scroll: ScrollState, color: Color, onMore: (() -> Unit)?, moreLabel: String = "Ďalšie možnosti") {
     val motion = MaterialTheme.motionScheme
     val top by animateFloatAsState(if (scroll.value > 0) 1f else 0f, motion.fastEffectsSpec(), label = "topEdge")
     val more = scroll.canScrollForward
@@ -467,7 +488,7 @@ fun BoxScope.ScrollEdges(scroll: ScrollState, color: Color, onMore: (() -> Unit)
                 Row(Modifier.heightIn(min = 44.dp).padding(start = 14.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(22.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Ďalšie možnosti", style = MaterialTheme.typography.labelLarge)
+                    Text(moreLabel, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -606,21 +627,27 @@ private fun Hint(text: String) {
     }
 }
 
+/** The Slovak line on or off: a real toggle for TalkBack ("Slovenský preklad, zapnuté"). */
 @Composable
 fun SkToggle(on: Boolean, onToggle: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(
-        onClick = onToggle,
+        checked = on,
+        onCheckedChange = { onToggle() },
         shape = CircleShape,
         color = if (on) scheme.primary else scheme.surface.copy(alpha = 0.6f),
         contentColor = if (on) scheme.onPrimary else scheme.onSurfaceVariant,
         border = if (on) null else androidx.compose.foundation.BorderStroke(1.dp, scheme.outlineVariant),
+        modifier = Modifier.semantics {
+            contentDescription = "Slovenský preklad otázky"
+            stateDescription = if (on) "Zapnuté" else "Vypnuté"
+        },
     ) {
         Row(Modifier.heightIn(min = 40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(UliIcons.Translate, null, Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             // Never "S / K": the chip keeps its width and the topic tags wrap instead.
-            Text("SK", style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
+            Text("SK", style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false, modifier = Modifier.clearAndSetSemantics { })
         }
     }
 }
@@ -677,7 +704,17 @@ fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit, modifi
  * above. Body text is full size; only the labels are small.
  */
 @Composable
-private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, comesBack: String?, frozen: Boolean, hero: Dp, modifier: Modifier = Modifier) {
+private fun FeedbackPanel(
+    q: Question,
+    correct: Boolean,
+    streak: Int,
+    comesBack: String?,
+    frozen: Boolean,
+    hero: Dp,
+    demoOpen: Boolean,
+    onDemoToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
     Surface(
         color = scheme.surfaceContainer,
@@ -685,7 +722,7 @@ private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, comesBack:
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 20.dp)) {
-            Verdict(correct, streak, comesBack, frozen, hero)
+            Verdict(correct, streak, comesBack, frozen, if (correct) hero else 0.dp)
             q.hook?.let {
                 Spacer(Modifier.height(14.dp))
                 Hook(it)
@@ -704,12 +741,14 @@ private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, comesBack:
             )
             q.demo?.let {
                 Spacer(Modifier.height(18.dp))
-                Terminal(it)
+                // After a miss there is already a lot to read: the terminal waits as one row until it is wanted.
+                if (correct) Terminal(it) else TerminalPeek(it, open = demoOpen, onToggle = onDemoToggle)
             }
             q.disputedNote?.let {
                 Spacer(Modifier.height(14.dp))
                 Disputed(it)
             }
+            if (!correct) Spacer(Modifier.height(hero))
         }
     }
 }
@@ -841,31 +880,4 @@ private fun VerdictBadge(correct: Boolean, frozen: Boolean, scale: Float = 1f) {
             )
         }
     }
-}
-
-/** "Znova o 4 hodiny", "Znova zajtra": when a card answered right comes due again. */
-fun comesBackIn(ms: Long): String? {
-    if (ms <= 0) return null
-    val min = (ms + 59_999) / 60_000
-    if (min < 60) return "Znova o $min " + plural(min, "minútu", "minúty", "minút")
-    val h = (ms + 30 * 60_000) / 3_600_000
-    if (h < 24) return if (h == 1L) "Znova o hodinu" else "Znova o $h " + plural(h, "hodinu", "hodiny", "hodín")
-    val d = (ms + 12 * 3_600_000) / 86_400_000
-    return when (d) {
-        1L -> "Znova zajtra"
-        7L -> "Znova o týždeň"
-        else -> "Znova o $d " + plural(d, "deň", "dni", "dní")
-    }
-}
-
-/** "Vráti sa o 3 otázky": when a missed card comes back in this round. */
-fun comesBackAfter(questions: Int): String = when {
-    questions <= 1 -> "Vráti sa hneď ako ďalšia"
-    else -> "Vráti sa o $questions " + plural(questions.toLong(), "otázku", "otázky", "otázok")
-}
-
-private fun plural(n: Long, one: String, few: String, many: String) = when (n) {
-    1L -> one
-    in 2L..4L -> few
-    else -> many
 }

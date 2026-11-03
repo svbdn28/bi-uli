@@ -84,6 +84,7 @@ import dev.hamper.uli.ui.theme.monoStyle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.runtime.rememberCoroutineScope
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -101,7 +102,11 @@ fun ExamScreen(vm: AppViewModel) {
     vm.exam?.let { last = it }
     val s = last ?: return
     var confirmQuit by remember { mutableStateOf(false) }
-    BackHandler { confirmQuit = true }
+    // Nothing answered yet: leaving just drops the attempt, nothing to confirm or to keep.
+    fun quit() {
+        if (s.exam.index == 0) vm.leaveExam() else confirmQuit = true
+    }
+    BackHandler { quit() }
 
     var now by remember { mutableLongStateOf(vm.clock()) }
     LaunchedEffect(Unit) {
@@ -113,7 +118,7 @@ fun ExamScreen(vm: AppViewModel) {
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 20.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { confirmQuit = true }) { Icon(Icons.Filled.Close, contentDescription = "Ukončiť skúšku") }
+            IconButton(onClick = { quit() }) { Icon(Icons.Filled.Close, contentDescription = "Ukončiť skúšku") }
             ExamBar((s.exam.index).toFloat() / s.exam.ids.size, Modifier.weight(1f).padding(horizontal = 6.dp))
             Spacer(Modifier.width(12.dp))
             Icon(UliIcons.Timer, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -137,15 +142,19 @@ fun ExamScreen(vm: AppViewModel) {
             label = "exam",
         ) { st ->
             val id = st.exam.ids.getOrNull(st.exam.index) ?: return@AnimatedContent
+            // The outgoing card stays visible while it slides out but no longer takes taps; the taps also name
+            // their question, so one landing late never picks on the next question.
+            val isCurrent = st.exam.index == s.exam.index
             ExamQuestion(
                 q = vm.byId.getValue(id),
                 st = st,
+                isCurrent = isCurrent,
                 number = st.exam.index + 1,
                 total = st.exam.ids.size,
                 showSk = vm.progress.showSk,
                 onToggleSk = vm::toggleSk,
-                onPick = vm::examPick,
-                onNext = vm::examNext,
+                onPick = { i -> vm.examPick(id, i) },
+                onNext = { vm.examNext(id) },
                 frozen = vm.shotMode,
             )
         }
@@ -177,6 +186,7 @@ private fun ExamBar(value: Float, modifier: Modifier) {
 private fun ExamQuestion(
     q: Question,
     st: ExamState,
+    isCurrent: Boolean,
     number: Int,
     total: Int,
     showSk: Boolean,
@@ -232,7 +242,7 @@ private fun ExamQuestion(
                                     letter = 'A' + pos,
                                     state = if (i in st.selected) OptState.Selected else OptState.Idle,
                                     multi = multi,
-                                    onClick = { onPick(i) },
+                                    onClick = if (isCurrent) ({ onPick(i) }) else null,
                                 )
                             }
                         }
@@ -244,7 +254,7 @@ private fun ExamQuestion(
         Box(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {
             BigButton(
                 text = if (number == total) "Odovzdať" else "Ďalej",
-                enabled = st.selected.size == q.choose,
+                enabled = isCurrent && st.selected.size == q.choose,
                 onClick = onNext,
                 trailing = number != total,
             )
@@ -327,7 +337,7 @@ fun ExamEndScreen(vm: AppViewModel) {
                     }
                 }
             }
-            item { EstimateNote((Srs.readiness(vm.ids, vm.progress) * 100).roundToInt()) }
+            item { EstimateNote((Srs.readiness(vm.ids, vm.progress) * 100).roundToInt(), Srs.passChance(vm.ids, vm.progress)) }
             if (res.wrong.isNotEmpty()) {
                 item {
                     Text(
@@ -342,7 +352,16 @@ fun ExamEndScreen(vm: AppViewModel) {
             }
         }
         StatusBarScrim(list.canScrollBackward)
-        BottomActions(primary = "Hotovo", onPrimary = vm::home, secondary = "Nová skúška", onSecondary = vm::startExam, modifier = Modifier.align(Alignment.BottomCenter))
+        val more = rememberMoreBelow(list)
+        val scope = rememberCoroutineScope()
+        BottomActions(
+            primary = "Hotovo",
+            onPrimary = vm::home,
+            secondary = "Nová skúška",
+            onSecondary = vm::startExam,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            onMore = if (more) ({ scope.launch { list.animateScrollBy(list.layoutInfo.viewportSize.height * 0.6f) } }) else null,
+        )
     }
 }
 
@@ -351,9 +370,9 @@ fun ExamEndScreen(vm: AppViewModel) {
  * 56 % there). Said right under the score, with the estimate itself, so the two screens never contradict.
  */
 @Composable
-private fun EstimateNote(pct: Int) {
+private fun EstimateNote(pct: Int, chance: Double) {
     val c = Uli.colors
-    val above = pct >= 80
+    val above = chance >= Srs.LIKELY_PASS
     Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(start = 14.dp, end = 16.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
@@ -370,6 +389,11 @@ private fun EstimateNote(pct: Int) {
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text("Odhad na skúške je teraz $pct %", style = MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp))
+                Text(
+                    "Šanca prejsť: ${chanceText(chance)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (above) c.right else MaterialTheme.colorScheme.onSurface,
+                )
                 Text(
                     "Rastie, keď odpoveď vydrží aj o pár hodín a dní. Jedna dobrá skúška ho len posunie.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -435,29 +459,65 @@ fun ReviewItem(q: Question, picked: Set<Int>?, shape: androidx.compose.ui.graphi
             }
             if (open) {
                 Spacer(Modifier.height(12.dp))
-                if (picked != null) {
-                    WrongAnswers(q, picked, codeOptions)
+                // Only indices this question has (a damaged save must never crash the review).
+                val picks = picked?.filter { it in q.options.indices }?.toSet()
+                if (picks != null) {
+                    WrongAnswers(q, picks, codeOptions)
                     Spacer(Modifier.height(6.dp))
                 }
                 CorrectAnswers(q, codeOptions)
                 Spacer(Modifier.height(14.dp))
-                val notes = picked.orEmpty().filter { !q.options[it].correct }.mapNotNull { q.options[it].note }
+                val notes = picks.orEmpty().filter { !q.options[it].correct }.mapNotNull { q.options[it].note }
                 Explanation(q, notes)
             }
         }
     }
 }
 
+/**
+ * True while the list's last item is not fully above the bottom actions (the list's bottom content padding):
+ * then the fold cuts a card and a "more" pill says so.
+ */
 @Composable
-fun BottomActions(primary: String, onPrimary: () -> Unit, secondary: String, onSecondary: () -> Unit, modifier: Modifier = Modifier) {
-    // A solid bar with a short fade above it: the list ends cleanly instead of showing through.
+fun rememberMoreBelow(list: androidx.compose.foundation.lazy.LazyListState): Boolean {
+    val more by remember(list) {
+        androidx.compose.runtime.derivedStateOf {
+            val info = list.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
+            last.index < info.totalItemsCount - 1 || last.offset + last.size > info.viewportEndOffset - info.afterContentPadding + 1
+        }
+    }
+    return more
+}
+
+@Composable
+fun BottomActions(
+    primary: String,
+    onPrimary: () -> Unit,
+    secondary: String,
+    onSecondary: () -> Unit,
+    modifier: Modifier = Modifier,
+    onMore: (() -> Unit)? = null,
+) {
+    // A solid bar with a short fade above it: the list ends cleanly instead of showing through. When the fold
+    // cuts a card, a pill on the fade says the list goes on.
     Column(modifier.fillMaxWidth()) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(20.dp)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))),
-        )
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(20.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))),
+            )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = onMore != null,
+                enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+                modifier = Modifier.padding(bottom = 6.dp),
+            ) {
+                MorePill("Pokračuje nižšie", onClick = { onMore?.invoke() })
+            }
+        }
         Column(
             Modifier
                 .fillMaxWidth()
@@ -470,6 +530,25 @@ fun BottomActions(primary: String, onPrimary: () -> Unit, secondary: String, onS
             TextButton(onClick = onSecondary, modifier = Modifier.padding(top = 2.dp)) {
                 Text(secondary, style = MaterialTheme.typography.titleSmall)
             }
+        }
+    }
+}
+
+/** A small dark pill with a down arrow: there is more below, tap to get there. */
+@Composable
+fun MorePill(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        shadowElevation = 4.dp,
+        modifier = modifier,
+    ) {
+        Row(Modifier.heightIn(min = 40.dp).padding(start = 12.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(text, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

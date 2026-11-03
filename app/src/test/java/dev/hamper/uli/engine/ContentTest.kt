@@ -100,4 +100,41 @@ class ContentTest {
         )
         assertEquals(null, questions.first { it.id == 67 }.disputedNote)
     }
+
+    @Test
+    fun optionsAboutTheOthersStayLastWhenShuffled() {
+        val byId = questions.associateBy { it.id }
+        for (seed in 0 until 30) {
+            val r = kotlin.random.Random(seed)
+            val q10 = byId.getValue(10)
+            assertEquals("All are correct", q10.options[Options.order(q10, r).last()].text)
+            val q67 = byId.getValue(67)
+            assertEquals("None of the above", q67.options[Options.order(q67, r).last()].text)
+        }
+        assertFalse(Options.refersToOthers("Offers both desktop and server products"))
+        assertFalse(Options.refersToOthers("Is useful for both business and home users"))
+        assertTrue(Options.refersToOthers("All of the above"))
+        assertTrue(Options.refersToOthers("Neither"))
+        // Every question still gets a full reordering of its own options.
+        for (q in questions) assertTrue("Q${q.id}", Options.isPermutation(Options.order(q, kotlin.random.Random(q.id)), q))
+        val pinned = questions.flatMap { q -> q.options.filter { Options.refersToOthers(it.text) }.map { q.id } }
+        assertEquals(listOf(10, 67), pinned)
+    }
+
+    @Test
+    fun aLoneEqualsIsCodeOnlyWhenNamedAsTheOperator() {
+        fun marked(text: String) = Code.spans(text, english = false).map { text.substring(it.first, it.last + 1) }
+        assertTrue("=" in marked("Operátor = porovnáva reťazce."))
+        assertTrue("=" in marked("Čísla: -eq -ne -lt -gt. Reťazce: = a !=."))
+        assertFalse("=" in marked("Mac = BSD v obleku, nie Linux."))
+        assertFalse("=" in marked("0 = vstup, 1 = výstup, 2 = chyby."))
+    }
+
+    @Test
+    fun fileNamesAndPathsInPlainOptionsAreCode() {
+        fun marked(text: String) = Code.spans(text, english = true).map { text.substring(it.first, it.last + 1) }
+        assertEquals(listOf("foo.tar.gz"), marked("Which command will show what is inside the compressed tarball with a name of foo.tar.gz?"))
+        assertEquals(listOf("/bin/csh"), marked("The operator should not be using /bin/csh"))
+        assertTrue(marked("glibc 2.26 is out.").isEmpty())
+    }
 }

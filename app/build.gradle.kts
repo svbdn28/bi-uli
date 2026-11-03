@@ -7,12 +7,13 @@ plugins {
 }
 
 // Release signing lives outside the repo so every build is signed with the same key.
+val signingPath: String = System.getenv("ULI_SIGNING_PROPERTIES")
+    ?: "${System.getProperty("user.home")}/.uli/android-signing.properties"
 val signingProps = Properties().apply {
-    val path = System.getenv("ULI_SIGNING_PROPERTIES")
-        ?: "${System.getProperty("user.home")}/.uli/android-signing.properties"
-    val file = File(path)
+    val file = File(signingPath)
     if (file.isFile) file.inputStream().use { load(it) }
 }
+val hasReleaseSigning = signingProps.getProperty("storeFile") != null
 
 android {
     namespace = "dev.hamper.uli"
@@ -27,7 +28,7 @@ android {
     }
 
     signingConfigs {
-        if (signingProps.getProperty("storeFile") != null) {
+        if (hasReleaseSigning) {
             create("release") {
                 storeFile = File(signingProps.getProperty("storeFile"))
                 storePassword = signingProps.getProperty("storePassword")
@@ -72,6 +73,21 @@ android {
 kotlin {
     compilerOptions {
         optIn.add("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
+    }
+}
+
+// A release build without the signing key would come out unsigned (and not installable over the real app):
+// fail before building anything instead. Debug builds do not need the key.
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    val ok = hasReleaseSigning
+    val path = signingPath
+    doFirst {
+        if (!ok) {
+            throw GradleException(
+                "Release signing is not set up: $path is missing or has no storeFile. " +
+                    "Create it (storeFile, storePassword, keyAlias, keyPassword) or point ULI_SIGNING_PROPERTIES at one.",
+            )
+        }
     }
 }
 

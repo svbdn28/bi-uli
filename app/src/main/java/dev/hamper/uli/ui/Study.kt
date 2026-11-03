@@ -195,7 +195,8 @@ fun OptionCard(
                         modifier = Modifier.weight(1f),
                     )
                 } else {
-                    Text(Code.gluePaths(text), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    // Plain options still set their paths and operators in mono, like prose does.
+                    CodeText(text, MaterialTheme.typography.bodyLarge, english = true, modifier = Modifier.weight(1f))
                 }
             }
             // Why this pick is wrong, right where the eye already is.
@@ -398,7 +399,7 @@ fun CorrectAnswers(q: Question, codeOptions: Set<Int>) {
                 if (i in codeOptions) {
                     Text(Code.gluePaths(t), style = monoStyle(fontSize = 15.sp, fontWeight = FontWeight.W500), color = c.onRightContainer)
                 } else {
-                    Text(Code.gluePaths(t), style = MaterialTheme.typography.bodyMedium, color = c.onRightContainer)
+                    CodeText(t, MaterialTheme.typography.bodyMedium, english = true, color = c.onRightContainer)
                 }
             }
         }
@@ -408,7 +409,7 @@ fun CorrectAnswers(q: Question, codeOptions: Set<Int>) {
 @Composable
 fun WrongAnswers(q: Question, picked: Set<Int>, codeOptions: Set<Int>) {
     val c = Uli.colors
-    val wrong = picked.filter { !q.options[it].correct }.sorted()
+    val wrong = picked.filter { it in q.options.indices && !q.options[it].correct }.sorted()
     val missing = q.correctIndices.isNotEmpty() && picked.isEmpty()
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (i in wrong) {
@@ -424,7 +425,7 @@ fun WrongAnswers(q: Question, picked: Set<Int>, codeOptions: Set<Int>) {
                 if (i in codeOptions) {
                     Text(Code.gluePaths(t), style = monoStyle(fontSize = 15.sp, fontWeight = FontWeight.W500), color = c.onWrongContainer)
                 } else {
-                    Text(Code.gluePaths(t), style = MaterialTheme.typography.bodyMedium, color = c.onWrongContainer)
+                    CodeText(t, MaterialTheme.typography.bodyMedium, english = true, color = c.onWrongContainer)
                 }
             }
         }

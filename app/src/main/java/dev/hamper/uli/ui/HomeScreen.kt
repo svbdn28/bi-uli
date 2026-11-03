@@ -1,6 +1,7 @@
 package dev.hamper.uli.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -108,7 +109,22 @@ fun HomeScreen(vm: AppViewModel) {
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item { Header(onReset = { confirmReset = true }) }
+                item {
+                    Header(
+                        subtitle = if (progress.cards.isEmpty()) "Úvod do Linuxu, zápočtový test" else todayLine(progress, now),
+                        frozen = vm.shotMode,
+                        onReset = { confirmReset = true },
+                    )
+                }
+                vm.damagedProgress?.let { damaged ->
+                    item {
+                        DamagedProgressCard(
+                            backupName = damaged.backup?.name,
+                            onRetry = vm::retryLoadProgress,
+                            onStartFresh = vm::acceptFreshProgress,
+                        )
+                    }
+                }
                 if (openExam != null) {
                     item {
                         OpenExamCard(
@@ -119,7 +135,7 @@ fun HomeScreen(vm: AppViewModel) {
                         )
                     }
                 }
-                item { ReadinessSummary(readiness, mastered, ids.size) }
+                item { ReadinessSummary(readiness, Srs.passChance(ids, progress), mastered, ids.size) }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         ModeRow(
@@ -234,7 +250,7 @@ fun HomeScreen(vm: AppViewModel) {
     if (confirmDiscardExam) {
         AlertDialog(
             onDismissRequest = { confirmDiscardExam = false },
-            title = { Text("Zahodiť rozpísanú skúšku?") },
+            title = { Text("Zahodiť rozrobenú skúšku?") },
             text = { Text("Odpovede z tohto pokusu sa nezapočítajú. Postup v otázkach ostane.") },
             confirmButton = {
                 TextButton(onClick = { vm.discardExam(); confirmDiscardExam = false }) {
@@ -283,9 +299,20 @@ private fun roundSubtitle(due: Int, new: Int, size: Int): String = when {
     else -> "$size otázok na precvičenie"
 }.replace("1 nových", "1 nová")
 
+/**
+ * The app's mark and name, with a line about today: a greeting for the time of day and how many questions
+ * you have already answered today. The cursor in the mark blinks, like a terminal waiting for you.
+ */
 @Composable
-private fun Header(onReset: () -> Unit) {
+private fun Header(subtitle: String, frozen: Boolean, onReset: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
+    val blink by androidx.compose.animation.core.rememberInfiniteTransition(label = "cursor").animateFloat(
+        1f, 0f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.keyframes { durationMillis = 1060; 1f at 0; 1f at 529; 0f at 530; 0f at 1059 },
+        ),
+        label = "blink",
+    )
     Row(
         Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -294,14 +321,22 @@ private fun Header(onReset: () -> Unit) {
             Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Uli.colors.amber),
             contentAlignment = Alignment.Center,
         ) {
-            Text(">_", style = monoStyle(fontSize = 17.sp, fontWeight = FontWeight.W700), color = Uli.colors.onAmber)
+            Row {
+                Text(">", style = monoStyle(fontSize = 17.sp, fontWeight = FontWeight.W700), color = Uli.colors.onAmber)
+                Text(
+                    "_",
+                    style = monoStyle(fontSize = 17.sp, fontWeight = FontWeight.W700),
+                    color = Uli.colors.onAmber,
+                    modifier = Modifier.graphicsLayer { alpha = if (frozen) 1f else blink },
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text("ULI", style = MaterialTheme.typography.titleLarge, lineHeight = 22.sp)
             Text(
-                "Úvod do Linuxu, zápočtový test",
-                style = MaterialTheme.typography.bodySmall,
+                subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -314,14 +349,37 @@ private fun Header(onReset: () -> Unit) {
     }
 }
 
+/** progress.json could not be read: say so plainly, say the copy is safe, and let the user choose. */
+@Composable
+private fun DamagedProgressCard(backupName: String?, onRetry: () -> Unit, onStartFresh: () -> Unit) {
+    val c = Uli.colors
+    Surface(color = c.wrongContainer, contentColor = c.onWrongContainer, shape = MaterialTheme.shapes.extraLarge) {
+        Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 14.dp, bottom = 8.dp)) {
+            Text("Nepodarilo sa načítať tvoj postup, záloha je uložená", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                (if (backupName != null) "Kópia súboru je v aplikácii ako $backupName. " else "") +
+                    "Kým nevyberieš, pôvodný súbor sa neprepíše. Medzitým sa učíš s prázdnym postupom.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onRetry) { Text("Skúsiť znova", color = c.onWrongContainer) }
+                TextButton(onClick = onStartFresh) { Text("Začať odznova", color = c.onWrongContainer) }
+            }
+        }
+    }
+}
+
 /**
  * The estimate as a compact summary: the number on the amber cookie, what it is, how many questions are
  * mastered, and the same number against the 80 % pass line.
  */
 @Composable
-private fun ReadinessSummary(readiness: Double, mastered: Int, total: Int) {
+private fun ReadinessSummary(readiness: Double, chance: Double, mastered: Int, total: Int) {
     val pct = (readiness * 100).roundToInt()
-    val above = pct >= 80
+    // Green only when passing is likely, not when the mean touches 80 % (that is a coin flip).
+    val above = chance >= Srs.LIKELY_PASS
     val c = Uli.colors
     val spin = remember { Animatable(-40f) }
     LaunchedEffect(Unit) { spin.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 120f)) }
@@ -364,10 +422,15 @@ private fun ReadinessSummary(readiness: Double, mastered: Int, total: Int) {
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Text(
+                        "Šanca prejsť: ${chanceText(chance)}",
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp),
+                        color = if (above) c.right else MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
             Spacer(Modifier.height(10.dp))
-            ExamMeter(readiness.toFloat())
+            ExamMeter(readiness.toFloat(), above)
         }
     }
 }
@@ -377,12 +440,12 @@ private fun zo(n: Int) = if (n.toString().first() in "467") "zo" else "z"
 
 /** Estimate on a 0 to 100 track with the pass line at 80 %. */
 @Composable
-private fun ExamMeter(value: Float) {
+private fun ExamMeter(value: Float, likely: Boolean) {
     val anim = remember { Animatable(0f) }
     LaunchedEffect(value) { anim.animateTo(value, androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 90f)) }
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
     val passZone = Uli.colors.right.copy(alpha = 0.18f)
-    val fill = if (value >= 0.8f) Uli.colors.right else MaterialTheme.colorScheme.primary
+    val fill = if (likely) Uli.colors.right else MaterialTheme.colorScheme.primary
     val line = MaterialTheme.colorScheme.onSurface
     Column {
         Box(Modifier.fillMaxWidth()) {
@@ -552,7 +615,7 @@ private fun OpenExamCard(answered: Int, total: Int, onResume: () -> Unit, onDisc
                 ShapeBadge(UliIcons.Timer, Shapes.clover4, scheme.tertiary, scheme.onTertiary, size = 40.dp, iconSize = 20.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Rozpísaná skúška nanečisto", style = MaterialTheme.typography.titleMedium)
+                    Text("Rozrobená skúška", style = MaterialTheme.typography.titleMedium)
                     Text(examProgress(answered, total), style = MaterialTheme.typography.bodyMedium, color = scheme.onTertiaryContainer.copy(alpha = 0.8f))
                 }
                 TextButton(onClick = onDiscard) { Text("Zahodiť", color = scheme.onTertiaryContainer) }

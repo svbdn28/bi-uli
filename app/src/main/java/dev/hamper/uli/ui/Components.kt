@@ -65,6 +65,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -210,6 +216,63 @@ fun Terminal(demo: String, modifier: Modifier = Modifier) {
                         }
                     }
                     Text(text, style = style, softWrap = true)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The demo folded into one obviously tappable row ("Ukážka v termináli" and its first command); a tap opens the
+ * full terminal in place and scrolls it into view, another tap folds it again.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun TerminalPeek(demo: String, open: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Uli.colors
+    val requester = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    androidx.compose.runtime.LaunchedEffect(open) {
+        if (open) {
+            kotlinx.coroutines.delay(320)
+            requester.bringIntoView()
+        }
+    }
+    val first = demo.lines().firstOrNull { it.startsWith("$ ") }?.removePrefix("$ ") ?: demo.lines().first()
+    Box(
+        modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(requester)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClickLabel = if (open) "Skryť ukážku" else "Ukázať ukážku", role = androidx.compose.ui.semantics.Role.Button) { onToggle() }
+            .semantics { stateDescription = if (open) "Rozbalené" else "Zbalené" }
+            .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
+    ) {
+        if (open) {
+            Terminal(demo)
+        } else {
+            Row(
+                Modifier.fillMaxWidth().background(c.terminal).heightIn(min = 60.dp).padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Ukážka v termináli", style = MaterialTheme.typography.labelLarge, color = c.terminalText)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = c.terminalPrompt, fontWeight = FontWeight.W700)) { append("$ ") }
+                            withStyle(SpanStyle(color = c.terminalDim)) { append(first) }
+                        },
+                        style = monoStyle(fontSize = 13.sp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape).background(c.terminalText.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(androidx.compose.material.icons.Icons.Filled.KeyboardArrowDown, null, tint = c.terminalText, modifier = Modifier.size(22.dp))
                 }
             }
         }

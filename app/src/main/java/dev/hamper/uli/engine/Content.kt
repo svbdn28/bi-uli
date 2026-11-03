@@ -79,3 +79,25 @@ object Content {
 
 /** Exact-set scoring: a multi question counts only when every correct option and nothing else is picked. */
 fun Question.isCorrect(selected: Set<Int>): Boolean = selected == correctIndices
+
+/** Display order of a question's options. */
+object Options {
+    /** "None of the above", "All are correct": options that talk about the others, so they stay last. */
+    private val aboutTheOthers = Regex(
+        "(?i)^(none|all|neither|both)( of)?( the)? ?(above|of these|of them|these|are correct|are true|the above)?[.!]?$",
+    )
+
+    fun refersToOthers(text: String): Boolean {
+        val t = text.trim()
+        return t.split(' ').size <= 4 && aboutTheOthers.matches(t)
+    }
+
+    /** Shuffled, but options that refer to the others keep their place at the end (in their original order). */
+    fun order(q: Question, random: kotlin.random.Random): List<Int> {
+        val (pinned, free) = q.options.indices.partition { refersToOthers(q.options[it].text) }
+        return free.shuffled(random) + pinned
+    }
+
+    /** A saved order is usable only if it is exactly a reordering of this question's options. */
+    fun isPermutation(order: List<Int>, q: Question): Boolean = order.sorted() == q.options.indices.toList()
+}

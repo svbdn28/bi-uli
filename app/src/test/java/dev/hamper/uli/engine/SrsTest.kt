@@ -45,7 +45,8 @@ class SrsTest {
     fun readinessAveragesProbabilityByBox() {
         val ids = listOf(1, 2, 3, 4, 5, 6)
         val p = ProgressData(cards = (0..5).associate { (it + 1) to CardState(box = it, timesRight = it) })
-        val expected = (0.25 + 0.6 + 0.75 + 0.85 + 0.93 + 0.97) / 6
+        // Box 3 with no record of how long its run lasted is assumed to be the fastest climb: not settled yet.
+        val expected = (0.25 + 0.6 + 0.75 + 0.75 + 0.93 + 0.97) / 6
         assertEquals(expected, Srs.readiness(ids, p), 1e-9)
         assertEquals(0.25, Srs.readiness(ids, ProgressData()), 1e-9)
         assertEquals(3, Srs.masteredCount(ids, p))
@@ -242,5 +243,93 @@ class SrsTest {
     fun dueNeedsASeenCard() {
         assertFalse(Srs.isDue(CardState(), now))
         assertTrue(Srs.isDue(CardState(box = 1, dueAt = now), now))
+    }
+
+    // Box 3 counts as 0.85 only once the answer has held for about a day.
+
+    @Test
+    fun boxThreeReachedInAnAfternoonIsCappedUntilItHolds() {
+        var s = Srs.answer(CardState(), true, now) // box 1
+        s = Srs.answer(s, true, now + 10 * min) // box 2
+        s = Srs.answer(s, true, now + 10 * min + 4 * hour) // box 3, four hours after the first right answer
+        assertEquals(3, s.box)
+        assertEquals(now, s.rightSince)
+        assertFalse(Srs.isSettled(s))
+        assertEquals(0.75, Srs.pCorrect(s), 1e-9)
+        // Answered right again 20 hours after the first right answer: now it has held.
+        val later = Srs.answer(s, true, now + 20 * hour)
+        assertEquals(3, later.box)
+        assertTrue(Srs.isSettled(later))
+        assertEquals(0.85, Srs.pCorrect(later), 1e-9)
+        // Once due it climbs to box 4 as before.
+        assertEquals(4, Srs.answer(later, true, s.dueAt).box)
+    }
+
+    @Test
+    fun aMissRestartsTheRun() {
+        var s = CardState(box = 3, lastSeenAt = now, rightSince = now - 2 * day, dueAt = now + day)
+        assertEquals(0.85, Srs.pCorrect(s), 1e-9)
+        s = Srs.answer(s, false, now)
+        assertEquals(null, s.rightSince)
+        s = Srs.answer(s, true, now + 10 * min)
+        assertEquals(now + 10 * min, s.rightSince)
+    }
+
+    @Test
+    fun oldSavesAssumeTheShortestPossibleRun() {
+        // No rightSince: a box-3 card may have climbed in 4 h 10 min, so it stays capped; box 4 needs over a day.
+        assertEquals(0.75, Srs.pCorrect(CardState(box = 3, timesRight = 3, lastSeenAt = now)), 1e-9)
+        assertEquals(0.93, Srs.pCorrect(CardState(box = 4, timesRight = 4, lastSeenAt = now)), 1e-9)
+        assertEquals(10 * min + 4 * hour, Srs.minSpan(3))
+    }
+
+    // Pass chance: 40 of 50 drawn from 70.
+
+    @Test
+    fun passNeedsFortyOfFifty() {
+        assertEquals(40, Srs.PASS_CORRECT)
+    }
+
+    @Test
+    fun aMeanOfEightyPercentIsACoinFlipNotAPass() {
+        val chance = Srs.passChance(List(70) { 0.8 })
+        // 50 cards at 0.8: mean 40, sd 2.83, so P(X >= 40) is a little over a half.
+        assertTrue("got $chance", chance in 0.53..0.60)
+        assertTrue(chance < Srs.LIKELY_PASS)
+    }
+
+    @Test
+    fun passChanceFollowsTheCards() {
+        assertTrue(Srs.passChance(List(70) { 0.25 }) < 1e-6)
+        assertTrue(Srs.passChance(List(70) { 0.97 }) > 0.999)
+        // Uniform 0.85: mean 42.5, sd 2.52, z = -1.19.
+        assertEquals(0.883, Srs.passChance(List(70) { 0.85 }), 0.01)
+        assertEquals(0.0, Srs.passChance(emptyList()), 0.0)
+        assertEquals(0.0, Srs.passChance(List(30) { 1.0 }), 0.0) // fewer cards than needed
+    }
+
+    @Test
+    fun passChanceMatchesASimulatedExam() {
+        val rnd = kotlin.random.Random(11)
+        // A mixed pool: some mastered, some shaky, some new.
+        val p = List(70) { i -> listOf(0.97, 0.93, 0.85, 0.75, 0.6, 0.25)[i % 6] }.map { it.coerceAtMost(1.0) }
+        val boosted = p.map { (it + 0.1).coerceAtMost(0.99) }
+        for (pool in listOf(p, boosted)) {
+            val trials = 40_000
+            var passes = 0
+            repeat(trials) {
+                val drawn = pool.indices.shuffled(rnd).take(50)
+                if (drawn.count { rnd.nextDouble() < pool[it] } >= 40) passes++
+            }
+            val simulated = passes.toDouble() / trials
+            assertEquals("pool mean ${pool.average()}", simulated, Srs.passChance(pool), 0.04)
+        }
+    }
+
+    @Test
+    fun normalCdfIsAccurate() {
+        assertEquals(0.5, Srs.normalCdf(0.0), 1e-7)
+        assertEquals(0.841345, Srs.normalCdf(1.0), 1e-5)
+        assertEquals(0.022750, Srs.normalCdf(-2.0), 1e-5)
     }
 }

@@ -30,8 +30,17 @@ object Code {
             t.startsWith("$") || t.startsWith("^") || t.startsWith("#!") || t.startsWith("!") ||
             (t.startsWith(".") && t[1].isLetter()) ||
             t.contains("[") || t.contains("*") || t.contains(">") || t.contains("|") ||
-            assignment.matches(t)
+            assignment.matches(t) || isFileName(t)
     }
+
+    private val fileName = Regex("^[A-Za-z0-9_~-]*[A-Za-z][A-Za-z0-9_~-]*(\\.[A-Za-z0-9]+)+$")
+    private val extensions = setOf("tar", "gz", "bz2", "xz", "zip", "tgz", "txt", "conf", "sh", "log", "iso", "jpg", "png", "cfg", "d")
+
+    /** "foo.tar.gz", "file.txt", "sysctl.conf": a file name, recognised by a known extension. */
+    private fun isFileName(t: String): Boolean =
+        fileName.matches(t) && t.substringAfterLast('.').lowercase() in extensions
+
+    private val operatorWords = setOf("operátor", "operator", "operátorom", "operátora")
 
     private val letterCase = Regex("(?i)^(mal|veľk)(é|ý|á|ým|ou)$")
     private val number = Regex("^[0-9]{1,6}$")
@@ -86,6 +95,17 @@ object Code {
             val next = toks.getOrNull(i + 1)?.core
             val conjunction = t.core[0] in "aiouvksz" && next != null && next.first().isLetter()
             if (!conjunction) code[i] = true
+        }
+        // A lone "=" is the comparison operator when it is named as one ("Operátor = porovnáva", "Reťazce: = a !="),
+        // not when it means "is" between two words ("Mac = BSD v obleku").
+        for ((i, t) in toks.withIndex()) {
+            if (code[i] || t.core != "=" || t.start != t.coreStart) continue
+            val prev = toks.getOrNull(i - 1)
+            val named = prev == null || prev.core.lowercase() in operatorWords || endsClause(text, prev) ||
+                text[prev.end - 1] == ':'
+            val listed = toks.getOrNull(i + 1)?.core in setOf("a", "alebo", "and", "or") &&
+                toks.getOrNull(i + 2)?.let { isSymbolic(it.core) } == true
+            if (named || listed) code[i] = true
         }
         // A number right after a flag or a command is its argument: "test $USERS -eq 5", "chmod 4755".
         for (i in 1 until toks.size) {
