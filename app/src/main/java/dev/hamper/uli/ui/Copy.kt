@@ -60,11 +60,11 @@ fun roundEndNote(kind: RoundKind, ids: List<Int>, mistakes: List<Int>, progress:
     return "Všetko na prvý pokus. Z Chýb zmiznú, keď ich trafíš aj neskôr. ${whenBack(left, left.size > 1)}"
 }
 
-/** "~57 %", with the ends said in words instead of a false "0 %" or "100 %". */
+/** "~57 %", with the ends said in words: a bare "pod 1 %" read as a verdict, not a forecast. */
 fun chanceText(p: Double): String {
     val pct = (p * 100).roundToInt()
     return when {
-        p < 0.01 -> "pod 1 %"
+        p < 0.05 -> "zatiaľ nízka"
         p > 0.99 -> "nad 99 %"
         else -> "~$pct %"
     }

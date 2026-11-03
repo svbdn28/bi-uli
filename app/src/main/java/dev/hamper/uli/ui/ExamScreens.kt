@@ -390,11 +390,6 @@ private fun EstimateNote(pct: Int, chance: Double) {
             Column(Modifier.weight(1f)) {
                 Text("Odhad na skúške je teraz $pct %", style = MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp))
                 Text(
-                    "Šanca prejsť: ${chanceText(chance)}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (above) c.right else MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
                     "Rastie, keď odpoveď vydrží aj o pár hodín a dní. Jedna dobrá skúška ho len posunie.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

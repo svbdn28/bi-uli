@@ -56,7 +56,8 @@ class CopyTest {
 
     @Test
     fun chanceEndsAreWords() {
-        assertEquals("pod 1 %", chanceText(0.001))
+        assertEquals("zatiaľ nízka", chanceText(0.001))
+        assertEquals("zatiaľ nízka", chanceText(0.04))
         assertEquals("~57 %", chanceText(0.567))
         assertEquals("nad 99 %", chanceText(0.999))
     }
