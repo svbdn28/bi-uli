@@ -11,6 +11,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.ScrollState
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.Brush
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.LaunchedEffect
@@ -109,7 +117,7 @@ fun QuizScreen(vm: AppViewModel) {
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        RoundTopBar(s, onClose = vm::home)
+        RoundTopBar(s, onClose = vm::home, animate = !vm.shotMode)
         val motion = MaterialTheme.motionScheme
         AnimatedContent(
             targetState = s,
@@ -139,7 +147,7 @@ fun QuizScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun RoundTopBar(s: QuizState, onClose: () -> Unit) {
+private fun RoundTopBar(s: QuizState, onClose: () -> Unit, animate: Boolean) {
     val r = s.round
     val segments = r.ids.map { id ->
         when {
@@ -151,7 +159,7 @@ private fun RoundTopBar(s: QuizState, onClose: () -> Unit) {
     }
     Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 20.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Zavrieť kolo") }
-        SegmentedProgress(segments, Modifier.weight(1f).padding(horizontal = 6.dp))
+        SegmentedProgress(segments, Modifier.weight(1f).padding(horizontal = 6.dp), animate = animate)
         Spacer(Modifier.width(10.dp))
         Text(
             "${r.displayNumber}/${r.total}",
@@ -182,7 +190,11 @@ private fun QuestionBody(
     val codeOptions = remember(q.id) { Code.codeOptions(q) }
     val multi = q.kind == Kind.Multi
     val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
     val motion = MaterialTheme.motionScheme
+    // When the question and its options do not fit (long text, SK line, big font scale), the card drops
+    // its decoration so the options get the room. Decided once per question, so nothing jumps later.
+    var compact by remember(q.id) { mutableStateOf(false) }
 
     // Before the answer the question card takes the spare height; after it, the feedback sheet does.
     val cardShare by animateFloatAsState(if (answered) 0f else 1f, motion.defaultSpatialSpec(), label = "share")
@@ -203,6 +215,7 @@ private fun QuestionBody(
                     gap = 12.dp,
                     topShare = cardShare,
                     fillColor = if (answered) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
+                    onOverflow = { if (!answered && isCurrent) compact = true },
                     top = {
                         QuestionCard(
                             q = q,
@@ -210,6 +223,8 @@ private fun QuestionBody(
                             showSk = showSk,
                             onToggleSk = onToggleSk,
                             frozen = frozen,
+                            compact = compact,
+                            keepHintWhenCompact = multi,
                             label = {
                                 Tag(q.topicEnum.title, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
                                 if (state.round.isRetry && isCurrent) {
@@ -266,15 +281,19 @@ private fun QuestionBody(
                             ) {
                                 FeedbackPanel(q = q, correct = state.correct, streak = state.round.streak, modifier = Modifier.padding(top = 12.dp))
                             }
-                            if (!answered) {
-                                Spacer(Modifier.height(if (multi) 8.dp else 12.dp))
-                                if (!multi) Spacer(Modifier.navigationBarsPadding())
-                            }
+                            if (!answered) Spacer(Modifier.height(if (multi) 8.dp else 12.dp))
                         }
                     },
                 )
             }
+            ScrollEdges(
+                scroll = scroll,
+                color = if (answered) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.background,
+                onMore = if (answered) null else ({ scope.launch { scroll.animateScrollTo(scroll.maxValue) } }),
+            )
         }
+        // Single choice has no bottom button: the options still end above the gesture bar, never under it.
+        if (!answered && !multi) Spacer(Modifier.navigationBarsPadding())
 
         // Pinned bottom: the check button (multi) or, once answered, "Ďalej" on the panel's color.
         AnimatedVisibility(
@@ -308,7 +327,8 @@ private fun QuestionBody(
 /**
  * A column at least [minHeight] tall. The leftover space goes to [top] while [topShare] is 1 (the question
  * card grows, so [bottom] hugs the lower edge, in thumb reach) and to a strip of [fillColor] under
- * [bottom] while it is 0 (the feedback sheet runs down to the pinned button). Taller content just scrolls.
+ * [bottom] while it is 0 (the feedback sheet runs down to the pinned button). Taller content just scrolls,
+ * and [onOverflow] hears about it.
  */
 @Composable
 fun FillColumn(
@@ -318,6 +338,8 @@ fun FillColumn(
     bottom: @Composable () -> Unit,
     topShare: Float = 1f,
     fillColor: Color = Color.Transparent,
+    onOverflow: (() -> Unit)? = null,
+    exactTop: Boolean = false,
 ) {
     Layout(
         content = {
@@ -330,14 +352,61 @@ fun FillColumn(
         val b = m[1].measure(Constraints(minWidth = w, maxWidth = w))
         val g = gap.roundToPx()
         val natural = m[0].minIntrinsicHeight(w)
+        if (natural + g + b.height > minHeight.roundToPx()) onOverflow?.invoke()
         val spare = (minHeight.roundToPx() - b.height - g - natural).coerceAtLeast(0)
-        val t = m[0].measure(Constraints(minWidth = w, maxWidth = w, minHeight = natural + (spare * topShare).toInt()))
+        val th = natural + (spare * topShare).toInt()
+        // exactTop bounds the top too, so a weighted child inside it can take the spare height.
+        val t = m[0].measure(Constraints(minWidth = w, maxWidth = w, minHeight = th, maxHeight = if (exactTop) th else Constraints.Infinity))
         val rest = (minHeight.roundToPx() - t.height - g - b.height).coerceAtLeast(0)
         val f = m[2].measure(Constraints.fixed(w, rest))
         layout(w, t.height + g + b.height + rest) {
             t.place(0, 0)
             b.place(0, t.height + g)
             f.place(0, t.height + g + b.height)
+        }
+    }
+}
+
+/**
+ * Scroll affordance for a screen that does not fit: a soft fade at the top once scrolled, a fade at the
+ * bottom while there is more, and (before the answer) a pill that jumps to the remaining options.
+ */
+@Composable
+fun BoxScope.ScrollEdges(scroll: ScrollState, color: Color, onMore: (() -> Unit)?) {
+    val motion = MaterialTheme.motionScheme
+    val top by animateFloatAsState(if (scroll.value > 0) 1f else 0f, motion.fastEffectsSpec(), label = "topEdge")
+    val more = scroll.canScrollForward
+    val bottom by animateFloatAsState(if (more) 1f else 0f, motion.fastEffectsSpec(), label = "bottomEdge")
+    Box(
+        Modifier.align(Alignment.TopCenter).fillMaxWidth().height(18.dp)
+            .graphicsLayer { alpha = top }
+            .background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0f)))),
+    )
+    Box(
+        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(64.dp)
+            .graphicsLayer { alpha = bottom }
+            .background(Brush.verticalGradient(listOf(color.copy(alpha = 0f), color))),
+    )
+    if (onMore != null) {
+        AnimatedVisibility(
+            visible = more,
+            enter = fadeIn(motion.fastEffectsSpec()) + scaleIn(motion.fastSpatialSpec(), initialScale = 0.8f),
+            exit = fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.8f),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+        ) {
+            Surface(
+                onClick = onMore,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                shadowElevation = 4.dp,
+            ) {
+                Row(Modifier.heightIn(min = 44.dp).padding(start = 14.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(22.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Ďalšie možnosti", style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
     }
 }
@@ -374,12 +443,16 @@ fun QuestionCard(
     frozen: Boolean,
     label: @Composable () -> Unit,
     hint: @Composable () -> Unit,
+    compact: Boolean = false,
+    keepHintWhenCompact: Boolean = false,
 ) {
     val c = Uli.colors
     val scheme = MaterialTheme.colorScheme
     val dark = scheme.primary == c.amber
     val card = if (dark) scheme.primaryContainer.copy(alpha = 0.30f) else c.amber.copy(alpha = 0.17f)
-    val qSize by animateFloatAsState(if (answered) 19f else 23f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "qsize")
+    // Only the answer animates the size; going compact snaps, so a question never shrinks in front of you.
+    val open by animateFloatAsState(if (answered) 0f else 1f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "qsize")
+    val qSize = 19f + ((if (compact) 20f else 23f) - 19f) * open
     Surface(
         color = card,
         shape = RoundedCornerShape(32.dp),
@@ -392,7 +465,7 @@ fun QuestionCard(
             Column {
                 // Once answered the card steps back to just the question.
                 AnimatedVisibility(!answered, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    Row(Modifier.padding(bottom = 16.dp), verticalAlignment = Alignment.Top) {
+                    Row(Modifier.padding(bottom = if (compact) 10.dp else 16.dp), verticalAlignment = Alignment.Top) {
                         FlowRow(
                             Modifier.weight(1f).padding(top = 2.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -418,10 +491,12 @@ fun QuestionCard(
                     )
                 }
             }
-            AnimatedVisibility(!answered, enter = fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                Row(Modifier.padding(top = 18.dp), verticalAlignment = Alignment.Bottom) {
-                    Box(Modifier.weight(1f).padding(bottom = 4.dp)) { hint() }
-                    PromptMark(frozen)
+            if (!compact || keepHintWhenCompact) {
+                AnimatedVisibility(!answered, enter = fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Row(Modifier.padding(top = if (compact) 10.dp else 18.dp), verticalAlignment = Alignment.Bottom) {
+                        Box(Modifier.weight(1f).padding(bottom = 4.dp)) { hint() }
+                        if (!compact) PromptMark(frozen)
+                    }
                 }
             }
         }
@@ -535,7 +610,10 @@ fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit, modifi
     }
 }
 
-/** The why, as a sheet that scrolls with the question: verdict, explanation, hook, terminal. */
+/**
+ * The why, as a sheet that scrolls with the question. One reading order and one rhythm:
+ * verdict, then why, then the tip, then the terminal.
+ */
 @Composable
 private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, modifier: Modifier = Modifier) {
     val c = Uli.colors
@@ -545,15 +623,15 @@ private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, modifier: 
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ShapeBadge(
                     if (correct) Icons.Filled.Check else Icons.Filled.Close,
                     if (correct) Shapes.verySunny else Shapes.puffy,
                     accent,
                     if (correct) c.onRight else c.onWrong,
-                    size = 40.dp,
-                    iconSize = 22.dp,
+                    size = 34.dp,
+                    iconSize = 20.dp,
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(
@@ -566,7 +644,7 @@ private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, modifier: 
                     Tag("$streak za sebou", c.amber, c.onAmber)
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             Explanation(q, emptyList())
         }
     }

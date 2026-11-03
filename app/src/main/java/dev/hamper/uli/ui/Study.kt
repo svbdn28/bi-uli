@@ -183,7 +183,7 @@ fun OptionCard(
                         modifier = Modifier.weight(1f),
                     )
                 } else {
-                    Text(text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(Code.gluePaths(text), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 }
             }
             // Why this pick is wrong, right where the eye already is.
@@ -265,11 +265,14 @@ private fun OptionBadge(letter: Char, state: OptState, multi: Boolean) {
     }
 }
 
-/** Why: the note for a wrong pick, the explanation, the memory hook and the terminal demo. */
+/**
+ * Why, in reading order with one rhythm (16 dp): the note for a wrong pick, the explanation, the memory
+ * hook and the terminal demo. Only the terminal keeps a box; the rest is plain type on the sheet.
+ */
 @Composable
 fun Explanation(q: Question, wrongNotes: List<String>, modifier: Modifier = Modifier) {
     val c = Uli.colors
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         for (note in wrongNotes) {
             Surface(color = c.wrongContainer.copy(alpha = 0.55f), contentColor = c.onWrongContainer, shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -330,22 +333,16 @@ fun Disputed(note: String) {
     }
 }
 
+/** The memory hook: an amber flower and one bold line, no box around it. */
 @Composable
 fun Hook(text: String) {
     val c = Uli.colors
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (MaterialTheme.colorScheme.primary == c.amber) 0.45f else 0.38f))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ShapeBadge(UliIcons.Lightbulb, Shapes.flower, c.amber, c.onAmber, size = 34.dp, iconSize = 18.dp)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        ShapeBadge(UliIcons.Lightbulb, Shapes.flower, c.amber, c.onAmber, size = 30.dp, iconSize = 17.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Zapamätaj si", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f))
-            CodeText(text, MaterialTheme.typography.titleMedium.copy(lineHeight = 23.sp), color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text("Zapamätaj si", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            CodeText(text, MaterialTheme.typography.titleMedium.copy(lineHeight = 23.sp), color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
@@ -368,7 +365,7 @@ fun CorrectAnswers(q: Question, codeOptions: Set<Int>) {
                 if (i in codeOptions) {
                     Text(Code.gluePaths(t), fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onRightContainer)
                 } else {
-                    Text(t, style = MaterialTheme.typography.bodyMedium, color = c.onRightContainer)
+                    Text(Code.gluePaths(t), style = MaterialTheme.typography.bodyMedium, color = c.onRightContainer)
                 }
             }
         }
@@ -394,7 +391,7 @@ fun WrongAnswers(q: Question, picked: Set<Int>, codeOptions: Set<Int>) {
                 if (i in codeOptions) {
                     Text(Code.gluePaths(t), fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onWrongContainer)
                 } else {
-                    Text(t, style = MaterialTheme.typography.bodyMedium, color = c.onWrongContainer)
+                    Text(Code.gluePaths(t), style = MaterialTheme.typography.bodyMedium, color = c.onWrongContainer)
                 }
             }
         }

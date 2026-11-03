@@ -38,6 +38,15 @@ class ContentTest {
     }
 
     @Test
+    fun terminalDemosFitFortyFourColumns() {
+        for (q in questions) {
+            for (line in q.demo?.lines().orEmpty()) {
+                assertTrue("Q${q.id}: ${line.length} > 44: $line", line.length <= 44 && '\t' !in line)
+            }
+        }
+    }
+
+    @Test
     fun everyTopicHasQuestions() {
         assertEquals(Topic.entries.toSet(), questions.map { it.topicEnum }.toSet())
     }

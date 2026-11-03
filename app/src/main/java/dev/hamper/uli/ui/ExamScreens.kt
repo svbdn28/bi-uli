@@ -78,6 +78,9 @@ import dev.hamper.uli.ui.theme.QuestionStyle
 import dev.hamper.uli.ui.theme.Rounded
 import dev.hamper.uli.ui.theme.Uli
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.rememberCoroutineScope
 import java.util.Locale
 
 fun formatPoints(p: Double): String = String.format(Locale.ROOT, "%.1f", p).replace('.', ',').removeSuffix(",0")
@@ -181,13 +184,17 @@ private fun ExamQuestion(
 ) {
     val codeOptions = remember(q.id) { Code.codeOptions(q) }
     val multi = q.kind == Kind.Multi
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    var compact by remember(q.id) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val viewport = maxHeight
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
                 FillColumn(
                     minHeight = viewport,
                     gap = 14.dp,
+                    onOverflow = { compact = true },
                     top = {
                         QuestionCard(
                             q = q,
@@ -195,6 +202,8 @@ private fun ExamQuestion(
                             showSk = showSk,
                             onToggleSk = onToggleSk,
                             frozen = frozen,
+                            compact = compact,
+                            keepHintWhenCompact = multi,
                             label = {
                                 Tag("Otázka $number z $total", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
                             },
@@ -227,6 +236,7 @@ private fun ExamQuestion(
                     },
                 )
             }
+            ScrollEdges(scroll, MaterialTheme.colorScheme.background, onMore = { scope.launch { scroll.animateScrollTo(scroll.maxValue) } })
         }
         Box(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {
             BigButton(
@@ -247,9 +257,11 @@ fun ExamEndScreen(vm: AppViewModel) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val accent = if (res.passed) c.right else c.wrong
+    val list = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = list,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = bottom + 140.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -325,6 +337,7 @@ fun ExamEndScreen(vm: AppViewModel) {
                 }
             }
         }
+        StatusBarScrim(list.canScrollBackward)
         BottomActions(primary = "Hotovo", onPrimary = vm::home, secondary = "Nová skúška", onSecondary = vm::startExam, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }

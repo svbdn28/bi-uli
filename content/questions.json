@@ -526,7 +526,7 @@
       }
     ],
     "explanation": "Pri ; sa príkazy spustia jeden po druhom bez ohľadu na to, či predchádzajúci uspel. Na podmienené reťazenie slúži && (ďalší len pri úspechu) a || (ďalší len pri zlyhaní).",
-    "demo": "$ echo jeden; ls /nope; echo dva\njeden\nls: cannot access '/nope': No such file or directory\ndva",
+    "demo": "$ echo jeden; cat nic; echo dva\njeden\ncat: nic: No such file or directory\ndva",
     "source": "ok"
   },
   {
@@ -861,7 +861,7 @@
     ],
     "explanation": "-S triedi podľa veľkosti, najväčší súbor je navrchu. Opačné poradie dostaneš pridaním -r (ls -Sr).",
     "hook": "Veľké S = Size, najväčší navrchu.",
-    "demo": "$ ls -lhS\ntotal 702M\n-rw-rw-r-- 1 bob bob 700M Nov  3 10:00 ubuntu.iso\n-rw-rw-r-- 1 bob bob 1.2M Nov  3 10:01 foto.jpg\n-rw-rw-r-- 1 bob bob   42 Nov  3 10:02 notes.txt",
+    "demo": "$ ls -1shS\ntotal 702M\n700M ubuntu.iso\n1.2M foto.jpg\n4.0K notes.txt",
     "source": "ok"
   },
   {
@@ -882,7 +882,7 @@
       }
     ],
     "explanation": "cp kopíruje odniekiaľ niekam, takže potrebuje aspoň dva argumenty. S jedným skončí chybou. Ak chceš kopírovať do aktuálneho adresára, cieľ je bodka: cp /etc/hosts .",
-    "demo": "$ cp notes.txt\ncp: missing destination file operand after 'notes.txt'\nTry 'cp --help' for more information.",
+    "demo": "$ cp notes.txt\ncp: missing destination file operand…\n$ cp notes.txt kopia.txt\n$ ls\nkopia.txt  notes.txt",
     "source": "ok"
   },
   {
@@ -1103,7 +1103,7 @@
     ],
     "explanation": "Programy majú dva výstupné kanály: STDOUT (deskriptor 1) pre bežný výstup a STDERR (deskriptor 2) pre chyby. Oba štandardne končia na obrazovke, ale dajú sa presmerovať zvlášť, napríklad 2>/dev/null.",
     "hook": "0 = vstup, 1 = výstup, 2 = chyby.",
-    "demo": "$ ls /nope\nls: cannot access '/nope': No such file or directory\n$ ls /nope 2>/dev/null\n$",
+    "demo": "$ cat nic\ncat: nic: No such file or directory\n$ cat nic 2>/dev/null\n$",
     "source": "ok"
   },
   {
@@ -1135,7 +1135,7 @@
     ],
     "explanation": "V regulárnom výraze ^ ukotví vzor na začiatok riadku a $ na koniec. grep ^test teda nájde „test 1“ aj „testing“, ale nie „my test“.",
     "hook": "^ začiatok riadku, $ koniec riadku.",
-    "demo": "$ printf 'test 1\\nmy test\\ntesting\\n' | grep ^test\ntest 1\ntesting",
+    "demo": "$ grep ^test file.txt\ntest 1\ntesting\n$ grep -v ^test file.txt\nmy test",
     "source": "ok"
   },
   {
@@ -1166,7 +1166,7 @@
       }
     ],
     "explanation": "egrep (to isté ako grep -E) pozná rozšírené regulárne výrazy, v ktorých | znamená „alebo“. Vzor musí byť v úvodzovkách, inak by shell znak | pochopil ako rúru.",
-    "demo": "$ printf 'start\\nmiddle\\nend\\n' | egrep 'start|end'\negrep: warning: egrep is obsolescent; using grep -E\nstart\nend",
+    "demo": "$ grep -E 'start|end' file.txt\nstart\nend\n$ grep -vE 'start|end' file.txt\nmiddle",
     "source": "ok"
   },
   {
@@ -1338,7 +1338,7 @@
     ],
     "explanation": "Tabuľka oddielov je buď staršia MBR (najviac 4 primárne oddiely, disky do 2 TB), alebo novšia GPT (128 oddielov, obrovské disky, patrí k UEFI). BIOS je firmvér, nie typ tabuľky.",
     "hook": "MBR: starý, 4 oddiely, 2 TB. GPT: nový, 128 oddielov.",
-    "demo": "$ sudo fdisk -l /dev/sda | grep 'Disklabel type'\nDisklabel type: gpt",
+    "demo": "$ sudo fdisk -l /dev/sda | grep Disklabel\nDisklabel type: gpt",
     "source": "ok"
   },
   {
@@ -1454,7 +1454,7 @@
     ],
     "explanation": "free ukazuje využitie RAM a swapu: celkovú, použitú, voľnú, cache a dostupnú pamäť. Obsadenie disku ukáže df, záťaž CPU top.",
     "hook": "free = voľná pamäť, df = voľný disk.",
-    "demo": "$ free -h\n               total        used        free      shared  buff/cache   available\nMem:           7.7Gi       2.1Gi       3.4Gi       180Mi       2.5Gi       5.6Gi\nSwap:          2.0Gi          0B       2.0Gi",
+    "demo": "$ free -h | cut -c1-44\n               total        used        free\nMem:           7.7Gi       2.1Gi       3.4Gi\nSwap:          2.0Gi          0B       2.0Gi",
     "source": "ok"
   },
   {
@@ -1484,7 +1484,7 @@
     ],
     "explanation": "/proc je virtuálny súborový systém, cez ktorý jadro ukazuje svoj stav. /proc/cmdline obsahuje presne tie parametre, ktoré bootloader (GRUB) odovzdal jadru pri štarte.",
     "hook": "cmdline = príkazový riadok jadra.",
-    "demo": "$ cat /proc/cmdline\nBOOT_IMAGE=/boot/vmlinuz-6.8.0-48-generic root=UUID=3b1f6c2e-8d4a-4f2b-9e1a-7c5d2f0a6b91 ro quiet splash",
+    "demo": "$ tr ' ' '\\n' < /proc/cmdline\nBOOT_IMAGE=/vmlinuz-6.8.0-48-generic\nroot=/dev/mapper/ubuntu--vg-ubuntu--lv\nro",
     "source": "ok"
   },
   {
@@ -1514,7 +1514,7 @@
     ],
     "explanation": "Zápis do /proc/sys platí len do reštartu. Trvalé nastavenia patria do /etc/sysctl.conf (alebo /etc/sysctl.d/), ktoré sa načítajú pri štarte, alebo hneď príkazom sysctl -p.",
     "hook": "/proc/sys ovláda príkaz sysctl, natrvalo cez sysctl.conf.",
-    "demo": "$ echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.conf\nnet.ipv4.ip_forward = 1\n$ sudo sysctl -p\nnet.ipv4.ip_forward = 1",
+    "demo": "$ sudo nano /etc/sysctl.conf\n$ grep ^net /etc/sysctl.conf\nnet.ipv4.ip_forward=1\n$ sudo sysctl -p\nnet.ipv4.ip_forward = 1",
     "source": "ok"
   },
   {
@@ -1547,7 +1547,7 @@
     ],
     "explanation": "ifconfig vypíše sieťové rozhrania aj s ich IP adresami. Dnes ho nahrádza ip addr a ifconfig často nie je predinštalovaný, ale na skúške je správne ifconfig. ipconfig je obdoba z Windowsu.",
     "hook": "Linux: ifconfig. Windows: ipconfig.",
-    "demo": "$ ifconfig eth0\neth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        inet 192.168.1.20  netmask 255.255.255.0  broadcast 192.168.1.255",
+    "demo": "$ sudo apt install net-tools\n…\n$ ifconfig eth0 | awk '/inet /{print $2}'\n192.168.1.20",
     "source": "ok"
   },
   {
@@ -1569,7 +1569,7 @@
     ],
     "explanation": "dig sa nikam neprihlasuje, len posiela DNS dotazy (napríklad akú IP adresu má doména). Odtlačok kľúča overuje identitu servera pri pripojení cez ssh.",
     "hook": "dig = DNS, fingerprint = ssh.",
-    "demo": "$ ssh bob@server\nThe authenticity of host 'server (192.168.1.10)' can't be established.\nED25519 key fingerprint is SHA256:7Kq1mWb2J0pZ3xT9vLr8cYhN4sE6uA5dF1gH2jK3lM0.\nAre you sure you want to continue connecting (yes/no/[fingerprint])?",
+    "demo": "$ ssh bob@server\n…\nED25519 key fingerprint is SHA256:7Kq1mW…\nAre you sure you want to continue connecting\n(yes/no/[fingerprint])? yes",
     "source": "ok"
   },
   {
@@ -1628,7 +1628,7 @@
     ],
     "explanation": "ss (socket statistics) je moderná náhrada príkazu netstat: ukáže otvorené TCP a UDP spojenia aj porty, na ktorých niečo počúva. Napríklad ss -tln vypíše počúvajúce TCP porty.",
     "hook": "ss = socket statistics.",
-    "demo": "$ ss -tln\nState  Recv-Q Send-Q Local Address:Port  Peer Address:Port Process\nLISTEN 0      4096   127.0.0.53%lo:53         0.0.0.0:*\nLISTEN 0      128          0.0.0.0:22          0.0.0.0:*",
+    "demo": "$ ss -tlnH | awk '{print $1, $4}'\nLISTEN 127.0.0.53%lo:53\nLISTEN 0.0.0.0:22\nLISTEN [::]:22",
     "source": "ok"
   },
   {
@@ -1659,7 +1659,7 @@
       }
     ],
     "explanation": "id bob vypíše UID, primárnu skupinu (gid) aj všetky skupiny (groups), do ktorých bob patrí. Fungoval by aj príkaz groups bob, ale nie groups -a.",
-    "demo": "$ id bob\nuid=1001(bob) gid=1001(bob) groups=1001(bob),27(sudo),100(users)",
+    "demo": "$ id bob | tr ' ' '\\n'\nuid=1001(bob)\ngid=1001(bob)\ngroups=1001(bob),27(sudo),100(users)",
     "source": "ok"
   },
   {
@@ -1715,7 +1715,7 @@
     ],
     "explanation": "Minimum je počet dní, ktoré musia od poslednej zmeny uplynúť, kým smie používateľ heslo zmeniť znova. 0 znamená žiadne čakanie, heslo môže meniť kedykoľvek.",
     "hook": "Minimum 0 = môžeš meniť hneď.",
-    "demo": "$ sudo chage -l bob | grep Minimum\nMinimum number of days between password change\t\t: 0",
+    "demo": "$ sudo passwd -S bob\nbob P 2026-10-20 0 99999 7 -1\n$ passwd\nChanging password for bob.\nCurrent password:",
     "source": "ok"
   },
   {
@@ -1772,7 +1772,7 @@
     ],
     "explanation": "w vypíše, kto je prihlásený a čo práve robí. Jeho prvý riadok je rovnaký ako výstup uptime: čas behu systému, počet používateľov a záťaž. who ukáže len zoznam prihlásených bez tejto hlavičky.",
     "hook": "w = who + uptime + čo kto robí.",
-    "demo": "$ w\n 14:02:11 up 3 days,  4:12,  1 user,  load average: 0.08, 0.03, 0.01\nUSER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU  WHAT\nbob      pts/0    192.168.1.5      13:55    0.00s  0.03s  0.00s w",
+    "demo": "$ w | head -1 | cut -d, -f1-3\n 14:02:11 up 3 days,  4:12,  1 user\n$ uptime -p\nup 3 days, 4 hours, 12 minutes",
     "source": "ok"
   },
   {
@@ -1803,7 +1803,7 @@
     ],
     "explanation": "Malé -g nastaví primárnu skupinu, veľké -G doplnkové (sekundárne) skupiny. Pozor: -G bez -a doterajšie doplnkové skupiny nahradí, preto sa píše usermod -aG skupina používateľ.",
     "hook": "Malé g: jedna primárna. Veľké G: viac doplnkových.",
-    "demo": "$ sudo usermod -aG docker bob\n$ id bob\nuid=1001(bob) gid=1001(bob) groups=1001(bob),999(docker)",
+    "demo": "$ sudo usermod -aG docker bob\n$ groups bob\nbob : bob docker",
     "source": "ok"
   },
   {
@@ -1888,7 +1888,7 @@
     ],
     "explanation": "-L (lock) zamkne heslo: pred hash v /etc/shadow pridá výkričník, takže žiadne zadané heslo nebude sedieť. Odomkne sa príkazom usermod -U.",
     "hook": "Veľké L = Lock, malé l = login (premenovanie).",
-    "demo": "$ sudo usermod -L bob\n$ sudo grep bob /etc/shadow\nbob:!$y$j9T$PaMoCzR1d7hXq3UuJ2k0n/$Wm5yQ1pZr8sKcA0vTbE7oLhN3iG6fD2xU9jY4wMqS1B:20395:0:99999:7:::",
+    "demo": "$ sudo usermod -L bob\n$ sudo passwd -S bob\nbob L 2026-10-20 0 99999 7 -1",
     "source": "ok"
   },
   {
@@ -1972,7 +1972,7 @@
     ],
     "explanation": "Zmazanie súboru je zmena adresára, nie súboru. Rozhoduje teda právo zápisu (w) a vstupu (x) na adresári, v ktorom súbor leží. Práve preto má /tmp sticky bit, ktorý mazanie cudzích súborov zakazuje.",
     "hook": "Mazanie riadi adresár, nie súbor.",
-    "demo": "$ ls -l rootfile\n-rw-r--r-- 1 root root 0 Nov  3 10:00 rootfile\n$ rm rootfile\nrm: remove write-protected regular empty file 'rootfile'? y",
+    "demo": "$ ls -l a.txt\n-rw-r--r-- 1 root root 0 Nov  3 10:00 a.txt\n$ rm -fv a.txt\nremoved 'a.txt'",
     "source": "ok"
   },
   {
@@ -1994,7 +1994,7 @@
     ],
     "explanation": "Vlastník súboru môže príkazom chown (alebo chgrp) zmeniť jeho skupinu na ľubovoľnú skupinu, v ktorej je sám členom. Iba root však môže meniť vlastníka (používateľa) súboru.",
     "hook": "Vlastníka mení len root, skupinu aj vlastník súboru.",
-    "demo": "$ chown :devs report.txt\n$ ls -l report.txt\n-rw-rw-r-- 1 bob devs 120 Nov  3 10:00 report.txt",
+    "demo": "$ ls -l plan.md\n-rw-rw-r-- 1 bob bob 0 Nov  3 10:00 plan.md\n$ chown :devs plan.md\n$ ls -l plan.md\n-rw-rw-r-- 1 bob devs 0 Nov  3 10:00 plan.md",
     "source": "ok"
   },
   {
@@ -2025,7 +2025,7 @@
       }
     ],
     "explanation": "-a zobrazí aj skryté súbory (začínajúce bodkou) a -l dlhý formát s právami, vlastníkom a skupinou. Spojením ls -la dostaneš oboje.",
-    "demo": "$ ls -la\ntotal 20\ndrwxr-x--- 3 bob  bob  4096 Nov  3 10:00 .\ndrwxr-xr-x 4 root root 4096 Oct 20 09:12 ..\n-rw-r--r-- 1 bob  bob   220 Oct 20 09:12 .bashrc",
+    "demo": "$ ls -la projekt\ntotal 12\ndrwxrwxr-x 2 bob bob 4096 Nov  3 10:00 .\ndrwxr-x--- 5 bob bob 4096 Nov  3 09:58 ..\n-rw-rw-r-- 1 bob bob   42 Nov  3 10:00 .env",
     "source": "ok"
   },
   {
@@ -2057,7 +2057,7 @@
     ],
     "explanation": "Prvá zo štyroch číslic v chmod nastavuje špeciálne bity: 4 = setuid, 2 = setgid, 1 = sticky. 4755 teda znamená setuid plus rwxr-xr-x a v ls -l uvidíš s namiesto x u vlastníka.",
     "hook": "SUID 4, SGID 2, sticky 1: ako r=4, w=2, x=1.",
-    "demo": "$ sudo chmod 4755 /usr/bin/program\n$ ls -l /usr/bin/program\n-rwsr-xr-x 1 root root 16384 Nov  3 10:00 /usr/bin/program",
+    "demo": "$ cd /usr/bin\n$ sudo chmod 4755 program\n$ ls -l program | cut -d' ' -f1,3\n-rwsr-xr-x root",
     "source": "ok"
   },
   {
@@ -2088,7 +2088,7 @@
     ],
     "explanation": "Súbory vytvorené v adresári so setgid zdedia skupinu adresára namiesto primárnej skupiny autora. Hodí sa to pre zdieľané tímové adresáre, kde majú všetky súbory patriť skupine tímu.",
     "hook": "setgid na adresári: súbory dedia skupinu adresára.",
-    "demo": "$ ls -ld /srv/team\ndrwxrwsr-x 2 root devs 4096 Nov  3 10:00 /srv/team\n$ touch /srv/team/a.txt\n$ ls -l /srv/team/a.txt\n-rw-rw-r-- 1 bob devs 0 Nov  3 10:01 /srv/team/a.txt",
+    "demo": "$ cd /srv/team\n$ ls -ld .\ndrwxrwsr-x 2 root devs 4096 Nov  3 10:00 .\n$ touch a.txt; ls -l a.txt\n-rw-rw-r-- 1 bob devs 0 Nov  3 10:01 a.txt",
     "source": "ok"
   },
   {
@@ -2143,7 +2143,7 @@
     ],
     "explanation": "ln má rovnaké poradie argumentov ako cp: najprv existujúci súbor, potom nové meno. Bez -s vznikne hard link, s -s symbolický link.",
     "hook": "ln ako cp: najprv existujúci, potom nový.",
-    "demo": "$ ln file link\n$ ls -li file link\n1311 -rw-rw-r-- 2 bob bob 5 Nov  3 10:00 file\n1311 -rw-rw-r-- 2 bob bob 5 Nov  3 10:00 link",
+    "demo": "$ ln file link\n$ ls -i file link\n1311204 file  1311204 link\n$ ls -l link\n-rw-rw-r-- 2 bob bob 5 Nov  3 10:00 link",
     "source": "ok"
   }
 ]

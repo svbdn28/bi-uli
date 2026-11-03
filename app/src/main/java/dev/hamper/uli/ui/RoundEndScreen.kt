@@ -7,6 +7,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -58,9 +61,11 @@ fun RoundEndScreen(vm: AppViewModel) {
     val readiness = (Srs.readiness(vm.ids, vm.progress) * 100).roundToInt()
     val mastered = Srs.masteredCount(vm.ids, vm.progress)
 
+    val list = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = list,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 24.dp, bottom = bottom + 140.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -78,7 +83,7 @@ fun RoundEndScreen(vm: AppViewModel) {
                         style = MaterialTheme.typography.displaySmall,
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         when {
                             s.mistakes.isEmpty() && s.kind == RoundKind.Mistakes ->
@@ -95,10 +100,25 @@ fun RoundEndScreen(vm: AppViewModel) {
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    StatTile("+${s.newlyMastered}", "novo zvládnuté", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, Modifier.weight(1f))
-                    StatTile("$mastered/${vm.ids.size}", "zvládnuté spolu", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, Modifier.weight(1f))
-                    StatTile("$readiness %", "odhad na skúške", if (readiness >= 80) c.rightContainer else MaterialTheme.colorScheme.primaryContainer, if (readiness >= 80) c.onRightContainer else MaterialTheme.colorScheme.onPrimaryContainer, Modifier.weight(1f))
+                // One quiet card with the two numbers that moved, instead of a row of colored tiles.
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.height(IntrinsicSize.Min).padding(vertical = 16.dp)) {
+                        Stat(
+                            value = "+${s.newlyMastered}",
+                            label = "novo zvládnuté",
+                            detail = "spolu $mastered zo ${vm.ids.size}",
+                            color = if (s.newlyMastered > 0) c.right else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Box(Modifier.fillMaxHeight().padding(vertical = 4.dp).width(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                        Stat(
+                            value = "$readiness %",
+                            label = "odhad na skúške",
+                            detail = if (readiness >= 80) "nad hranicou 80 %" else "hranica je 80 %",
+                            color = if (readiness >= 80) c.right else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
             if (s.mistakes.isNotEmpty()) {
@@ -115,6 +135,7 @@ fun RoundEndScreen(vm: AppViewModel) {
             }
         }
         if (good) Celebration(vm.shotMode, Modifier.align(Alignment.TopCenter).padding(top = top + 24.dp))
+        StatusBarScrim(list.canScrollBackward)
         BottomActions(
             primary = "Ďalšie kolo",
             onPrimary = vm::startRound,
@@ -162,13 +183,12 @@ private fun ScoreBadge(score: Int, total: Int, good: Boolean) {
 }
 
 @Composable
-private fun StatTile(value: String, label: String, container: Color, content: Color, modifier: Modifier) {
-    Surface(color = container, contentColor = content, shape = MaterialTheme.shapes.large, modifier = modifier) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 14.dp)) {
-            Text(value, fontFamily = Rounded, fontWeight = FontWeight.W800, fontSize = 24.sp, lineHeight = 26.sp)
-            Spacer(Modifier.height(2.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = content.copy(alpha = 0.75f))
-        }
+private fun Stat(value: String, label: String, detail: String, color: Color, modifier: Modifier) {
+    Column(modifier.padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontFamily = Rounded, fontWeight = FontWeight.W800, fontSize = 28.sp, lineHeight = 30.sp, color = color)
+        Spacer(Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center)
+        Text(detail, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 

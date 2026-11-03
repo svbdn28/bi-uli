@@ -111,7 +111,25 @@ object Shots {
                     exam = ExamState(e, vm.orderFor(vm.byId.getValue(e.current!!))),
                 )
             }
-            else -> vm.installShot(data, NOW, Screen.Home)
+            // "q:51", "q:5:sk", "exam:41": any question unanswered, in a round or the mock exam (manual checks).
+            else -> {
+                val parts = name.split(":")
+                val id = parts.getOrNull(1)?.toIntOrNull()?.takeIf { it in vm.byId }
+                val seeded = data.copy(showSk = parts.getOrNull(2) == "sk")
+                val q = id?.let { vm.byId.getValue(it) }
+                when {
+                    q != null && parts[0] == "q" -> {
+                        val r = Round(listOf(id) + roundIds.filter { it != id }.take(9))
+                        vm.installShot(seeded, NOW, Screen.Quiz, quiz = QuizState(RoundKind.Smart, r, vm.orderFor(q)))
+                    }
+                    q != null && parts[0] == "exam" -> {
+                        val ids = vm.ids.filter { it != id }.shuffled(Random(3))
+                        val e = Exam(ids = ids.take(6) + id + ids.drop(6).take(43), index = 6, startedAt = NOW - 4 * 60_000L)
+                        vm.installShot(seeded, NOW, Screen.ExamRun, exam = ExamState(e, vm.orderFor(q)))
+                    }
+                    else -> vm.installShot(data, NOW, Screen.Home)
+                }
+            }
         }
     }
 }

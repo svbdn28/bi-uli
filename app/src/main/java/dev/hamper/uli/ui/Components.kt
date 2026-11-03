@@ -1,6 +1,23 @@
 package dev.hamper.uli.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.PI
+import kotlin.math.sin
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
@@ -108,13 +125,14 @@ fun rememberCodeText(text: String, english: Boolean): AnnotatedString {
         buildAnnotatedString {
             var pos = 0
             for (r in spans) {
-                if (r.first > pos) append(text.substring(pos, r.first))
+                // Prose never breaks right after a slash either ("/bin/" + "csh").
+                if (r.first > pos) append(Code.gluePaths(text.substring(pos, r.first)))
                 withStyle(SpanStyle(fontFamily = Mono, fontSize = 0.92.em(), background = bg, fontWeight = FontWeight.W500)) {
                     append(Code.unbreakable(text.substring(r.first, r.last + 1)))
                 }
                 pos = r.last + 1
             }
-            if (pos < text.length) append(text.substring(pos))
+            if (pos < text.length) append(Code.gluePaths(text.substring(pos)))
         }
     }
 }
@@ -140,7 +158,11 @@ fun CodeText(
     )
 }
 
-/** The demo as a little terminal: prompts in amber, commands bright, output dimmed. */
+/**
+ * The demo as a little terminal: prompts in amber, commands bright, output dimmed.
+ * The font is sized so a [TERMINAL_COLUMNS]-column line fits the block at font scale 1.0 (every demo is
+ * written to that width). At larger font scales a line soft-wraps with a hanging indent instead.
+ */
 @Composable
 fun Terminal(demo: String, modifier: Modifier = Modifier) {
     val c = Uli.colors
@@ -149,40 +171,45 @@ fun Terminal(demo: String, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(c.terminal)
-            .padding(top = 9.dp, bottom = 12.dp),
+            .padding(top = 10.dp, bottom = 12.dp),
     ) {
-        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(c.terminalPrompt))
             Spacer(Modifier.width(8.dp))
             Text("bob@uli: ~", fontFamily = Mono, fontSize = 11.sp, color = c.terminalDim)
         }
         Spacer(Modifier.height(6.dp))
-        // Soft wrap with a hanging indent: a continuation starts two columns in, so nothing is cut
-        // and it still reads as one line.
-        val hang = TextIndent(firstLine = 0.sp, restLine = (TERMINAL_SP * 0.6f * 2).sp)
-        Column(Modifier.padding(horizontal = 14.dp)) {
-            for (line in demo.lines()) {
-                val text = buildAnnotatedString {
-                    if (line.startsWith("$ ")) {
-                        withStyle(SpanStyle(color = c.terminalPrompt, fontWeight = FontWeight.W700)) { append("$ ") }
-                        withStyle(SpanStyle(color = c.terminalText, fontWeight = FontWeight.W500)) { append(Code.gluePaths(line.removePrefix("$ "))) }
-                    } else if (line == "$") {
-                        withStyle(SpanStyle(color = c.terminalPrompt, fontWeight = FontWeight.W700)) { append("$") }
-                    } else {
-                        withStyle(SpanStyle(color = c.terminalDim)) { append(Code.gluePaths(line.replace("\t", "    "))) }
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+            // JetBrains Mono advances 0.6 em per glyph; sp equals dp at font scale 1.0.
+            val fitted = (maxWidth.value / (TERMINAL_COLUMNS * 0.6f + 0.4f)).coerceIn(10.5f, 14f)
+            val style = TextStyle(
+                fontFamily = Mono,
+                fontSize = fitted.sp,
+                lineHeight = (fitted * 1.45f).sp,
+                // Soft wrap fallback: a continuation starts two columns in, so it still reads as one line.
+                textIndent = TextIndent(firstLine = 0.sp, restLine = (fitted * 0.6f * 2).sp),
+            )
+            Column {
+                for (line in demo.lines()) {
+                    val text = buildAnnotatedString {
+                        if (line.startsWith("$ ")) {
+                            withStyle(SpanStyle(color = c.terminalPrompt, fontWeight = FontWeight.W700)) { append("$ ") }
+                            withStyle(SpanStyle(color = c.terminalText, fontWeight = FontWeight.W500)) { append(Code.gluePaths(line.removePrefix("$ "))) }
+                        } else if (line == "$") {
+                            withStyle(SpanStyle(color = c.terminalPrompt, fontWeight = FontWeight.W700)) { append("$") }
+                        } else {
+                            withStyle(SpanStyle(color = c.terminalDim)) { append(Code.gluePaths(line.replace("\t", "    "))) }
+                        }
                     }
+                    Text(text, style = style, softWrap = true)
                 }
-                Text(
-                    text,
-                    style = TextStyle(fontFamily = Mono, fontSize = TERMINAL_SP.sp, lineHeight = 18.sp, textIndent = hang),
-                    softWrap = true,
-                )
             }
         }
     }
 }
 
-private const val TERMINAL_SP = 12.5f
+/** Every demo line is at most this many characters (ContentTest keeps it so). */
+const val TERMINAL_COLUMNS = 44
 
 /** A badge: an icon inside a Material shape. */
 @Composable
@@ -202,31 +229,63 @@ fun ShapeBadge(
 
 enum class Seg { Right, Wrong, Current, Upcoming }
 
-/** Round progress: one pill per card, colored by the first attempt. */
+/**
+ * Round progress: one pill per card, colored by the first attempt. Right answers in a row fuse into one
+ * bar (a streak you can see), and the card you are on is a gently moving wave, so the round reads as
+ * something in motion even before you answer.
+ */
 @Composable
-fun SegmentedProgress(segments: List<Seg>, modifier: Modifier = Modifier) {
+fun SegmentedProgress(segments: List<Seg>, modifier: Modifier = Modifier, animate: Boolean = true) {
     val c = Uli.colors
-    Row(modifier.height(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (s in segments) {
+    val primary = MaterialTheme.colorScheme.primary
+    val wave = rememberInfiniteTransition(label = "wave")
+    val phase by wave.animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "phase")
+    Row(modifier.height(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        segments.forEachIndexed { i, s ->
+            val prevRight = s == Seg.Right && segments.getOrNull(i - 1) == Seg.Right
+            val nextRight = s == Seg.Right && segments.getOrNull(i + 1) == Seg.Right
+            if (i > 0 && !prevRight) Spacer(Modifier.width(4.dp))
             val color by animateColorAsState(
                 when (s) {
                     Seg.Right -> c.right
                     Seg.Wrong -> c.wrong
-                    Seg.Current -> MaterialTheme.colorScheme.primary
+                    Seg.Current -> primary
                     Seg.Upcoming -> MaterialTheme.colorScheme.surfaceContainerHighest
                 },
                 MaterialTheme.motionScheme.defaultEffectsSpec(),
                 label = "seg",
             )
-            val h by animateDpAsState(if (s == Seg.Current) 10.dp else 6.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "segh")
-            Box(
-                Modifier
-                    .weight(if (s == Seg.Current) 1.6f else 1f)
-                    .align(Alignment.CenterVertically)
-                    .height(h)
-                    .clip(CircleShape)
-                    .background(color),
-            )
+            if (s == Seg.Current) {
+                Canvas(Modifier.weight(1.8f).fillMaxHeight()) {
+                    val stroke = 4.dp.toPx()
+                    val amp = 2.6.dp.toPx()
+                    val length = 11.dp.toPx()
+                    val shift = (if (animate) phase else 0.25f) * length
+                    val mid = size.height / 2
+                    val path = Path()
+                    var x = stroke / 2
+                    path.moveTo(x, mid + amp * sin((x + shift) / length * 2 * PI).toFloat())
+                    while (x < size.width - stroke / 2) {
+                        x = (x + 1.dp.toPx()).coerceAtMost(size.width - stroke / 2)
+                        path.lineTo(x, mid + amp * sin((x + shift) / length * 2 * PI).toFloat())
+                    }
+                    drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
+                }
+            } else {
+                val r = 3.dp
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(6.dp)
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = if (prevRight) 0.dp else r, bottomStart = if (prevRight) 0.dp else r,
+                                topEnd = if (nextRight) 0.dp else r, bottomEnd = if (nextRight) 0.dp else r,
+                            ),
+                        )
+                        .background(color),
+                )
+            }
         }
     }
 }
@@ -261,4 +320,18 @@ fun Modifier.pressScale(pressed: Boolean): Modifier {
 @Composable
 fun OutlinedBox(border: Color, shape: Shape, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Box(modifier.border(BorderStroke(2.dp, border), shape).heightIn(min = 0.dp)) { content() }
+}
+
+/**
+ * Behind the status bar on screens that scroll under it: invisible at rest, the paper color plus a short
+ * fade once the content has moved, so the clock never sits on top of text.
+ */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.StatusBarScrim(visible: Boolean) {
+    val bg = MaterialTheme.colorScheme.background
+    val a by animateFloatAsState(if (visible) 1f else 0f, MaterialTheme.motionScheme.fastEffectsSpec(), label = "scrim")
+    Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().graphicsLayer { alpha = a }) {
+        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(bg))
+        Box(Modifier.fillMaxWidth().height(16.dp).background(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0f)))))
+    }
 }

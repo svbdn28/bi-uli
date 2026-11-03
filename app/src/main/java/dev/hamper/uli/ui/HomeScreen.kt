@@ -5,6 +5,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -76,12 +78,8 @@ fun HomeScreen(vm: AppViewModel) {
     val ids = vm.ids
     val readiness = Srs.readiness(ids, progress)
     val mastered = Srs.masteredCount(ids, progress)
-    val learning = ids.count { progress.card(it).let { c -> !c.isNew && !c.isMastered } }
     val now = vm.clock()
-    val allMistakes = Srs.allMistakes(ids, progress, now)
     val drill = vm.mistakeIds().size
-    val mistakesDue = allMistakes.count { Srs.isDue(progress.card(it), now) }
-    val nextMistakeIn = allMistakes.minOfOrNull { progress.card(it).dueAt }?.let { it - now }
     val preview = vm.nextRoundPreview()
     val openRound = vm.quiz
     val openExam = vm.exam
@@ -93,66 +91,79 @@ fun HomeScreen(vm: AppViewModel) {
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    Box(Modifier.fillMaxSize()) {
+    val list = rememberLazyListState()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The first screen is calm: the header, one hero (the estimate against the 80 % line) and three
+        // shortcuts, sized to the viewport. Topics start below the fold; only their heading peeks in.
+        val firstScreen = maxHeight - top - 8.dp - bottom - 128.dp - 34.dp
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = list,
             // The bottom padding reserves the whole action bar, so the last topic ends above it.
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = bottom + 128.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Header(onReset = { confirmReset = true }) }
-            if (openExam != null) {
-                item {
-                    OpenExamCard(
-                        number = openExam.exam.index + 1,
-                        total = openExam.exam.ids.size,
-                        onResume = vm::resumeExam,
-                        onDiscard = { confirmDiscardExam = true },
-                    )
-                }
-            }
-            item { ReadinessCard(readiness, mastered, learning, ids.size) }
             item {
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ActionTile(
-                        title = "Skúška nanečisto",
-                        subtitle = if (openExam != null) "Rozpísaná, ${openExam.exam.index + 1}/${openExam.exam.ids.size}" else "50 otázok",
-                        icon = UliIcons.Timer,
-                        shape = Shapes.clover4,
-                        container = MaterialTheme.colorScheme.tertiaryContainer,
-                        content = MaterialTheme.colorScheme.onTertiaryContainer,
-                        onClick = if (openExam != null) vm::resumeExam else vm::startExam,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionTile(
-                        title = "Chyby",
-                        subtitle = if (drill == 0) "Zatiaľ žiadne" else "$drill ${questionsWord(drill)}",
-                        note = mistakesNote(allMistakes.size, drill, mistakesDue, nextMistakeIn),
-                        icon = UliIcons.Replay,
-                        shape = Shapes.softBurst,
-                        container = Uli.colors.wrongContainer,
-                        content = Uli.colors.onWrongContainer,
-                        onClick = vm::startMistakes,
-                        enabled = drill > 0,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionTile(
-                        title = "Všetky otázky",
-                        subtitle = "${ids.size} otázok",
-                        icon = UliIcons.Stack,
-                        shape = Shapes.cookie6,
-                        container = MaterialTheme.colorScheme.secondaryContainer,
-                        content = MaterialTheme.colorScheme.onSecondaryContainer,
-                        onClick = { vm.openBrowse() },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                FillColumn(
+                    minHeight = firstScreen,
+                    gap = 12.dp,
+                    exactTop = true,
+                    top = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Header(onReset = { confirmReset = true })
+                            if (openExam != null) {
+                                OpenExamCard(
+                                    number = openExam.exam.index + 1,
+                                    total = openExam.exam.ids.size,
+                                    onResume = vm::resumeExam,
+                                    onDiscard = { confirmDiscardExam = true },
+                                )
+                            }
+                            ReadinessHero(readiness, mastered, ids.size, Modifier.weight(1f))
+                        }
+                    },
+                    bottom = {
+                        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ActionTile(
+                                title = "Skúška nanečisto",
+                                subtitle = if (openExam != null) "Rozpísaná, ${openExam.exam.index + 1}/${openExam.exam.ids.size}" else "50 otázok",
+                                icon = UliIcons.Timer,
+                                shape = Shapes.clover4,
+                                container = MaterialTheme.colorScheme.tertiaryContainer,
+                                content = MaterialTheme.colorScheme.onTertiaryContainer,
+                                onClick = if (openExam != null) vm::resumeExam else vm::startExam,
+                                modifier = Modifier.weight(1f),
+                            )
+                            ActionTile(
+                                title = "Chyby",
+                                subtitle = if (drill == 0) "Zatiaľ žiadne" else "$drill ${questionsWord(drill)}",
+                                icon = UliIcons.Replay,
+                                shape = Shapes.softBurst,
+                                container = Uli.colors.wrongContainer,
+                                content = Uli.colors.onWrongContainer,
+                                onClick = vm::startMistakes,
+                                enabled = drill > 0,
+                                modifier = Modifier.weight(1f),
+                            )
+                            ActionTile(
+                                title = "Všetky otázky",
+                                subtitle = "${ids.size} otázok",
+                                icon = UliIcons.Stack,
+                                shape = Shapes.cookie6,
+                                container = MaterialTheme.colorScheme.secondaryContainer,
+                                content = MaterialTheme.colorScheme.onSecondaryContainer,
+                                onClick = { vm.openBrowse() },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    },
+                )
             }
             item {
                 Text(
                     "Témy",
                     style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 8.dp, top = 16.dp, bottom = 2.dp),
+                    modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp),
                 )
             }
             item {
@@ -167,6 +178,8 @@ fun HomeScreen(vm: AppViewModel) {
                 }
             }
         }
+
+        StatusBarScrim(list.canScrollBackward)
 
         // The one big action lives in the thumb zone, on a solid bar: the list ends behind a short fade
         // above it instead of ghosting through.
@@ -230,25 +243,6 @@ fun HomeScreen(vm: AppViewModel) {
     }
 }
 
-/** Why the Chyby count is what it is: how many are up now, or when the next one comes back. */
-private fun mistakesNote(total: Int, drill: Int, due: Int, nextIn: Long?): String? = when {
-    total == 0 -> null
-    total > drill -> "+${total - drill} v ďalšom kole"
-    due in 1 until total -> "$due na rade teraz"
-    due == 0 && nextIn != null -> "na rade ${formatIn(nextIn)}"
-    else -> null
-}
-
-/** "o 9 min", "o 3 h", "o 2 dni" for a time from now. */
-fun formatIn(ms: Long): String {
-    val min = ((ms + 59_999) / 60_000).coerceAtLeast(1)
-    return when {
-        min < 60 -> "o $min min"
-        min < 24 * 60 -> "o ${(min + 59) / 60} h"
-        else -> ((min + 24 * 60 - 1) / (24 * 60)).let { d -> if (d == 1L) "zajtra" else "o $d ${if (d in 2..4) "dni" else "dní"}" }
-    }
-}
-
 fun questionsWord(n: Int) = when {
     n == 1 -> "otázka"
     n in 2..4 -> "otázky"
@@ -293,79 +287,70 @@ private fun Header(onReset: () -> Unit) {
     }
 }
 
+/** The one hero: the exam estimate on a cookie, the same number against the 80 % pass line, and plain words. */
 @Composable
-private fun ReadinessCard(readiness: Double, mastered: Int, learning: Int, total: Int) {
+private fun ReadinessHero(readiness: Double, mastered: Int, total: Int, modifier: Modifier = Modifier) {
     val pct = (readiness * 100).roundToInt()
     val above = pct >= 80
     val c = Uli.colors
     val spin = remember { Animatable(-40f) }
     LaunchedEffect(Unit) { spin.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 120f)) }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.extraLarge) {
-        Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(124.dp), contentAlignment = Alignment.Center) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { rotationZ = spin.value }
-                            .clip(Shapes.cookie12)
-                            .background(if (above) c.right else c.amber),
-                    )
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            "$pct",
-                            fontFamily = Rounded,
-                            fontWeight = FontWeight.W800,
-                            fontSize = 50.sp,
-                            lineHeight = 50.sp,
-                            color = if (above) c.onRight else c.onAmber,
-                        )
-                        Text(
-                            "%",
-                            fontFamily = Rounded,
-                            fontWeight = FontWeight.W700,
-                            fontSize = 22.sp,
-                            color = if (above) c.onRight else c.onAmber,
-                            modifier = Modifier.padding(bottom = 6.dp, start = 1.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(18.dp))
-                Column {
-                    Text("Odhad na skúške", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(4.dp))
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.extraLarge, modifier = modifier.fillMaxWidth()) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.size(136.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { rotationZ = spin.value }
+                        .clip(Shapes.cookie12)
+                        .background(if (above) c.right else c.amber),
+                )
+                Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        if (above) "Si nad hranicou 80 %. Drž to." else "Do hranice 80 % ti chýba ${80 - pct} %.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        "$pct",
+                        fontFamily = Rounded,
+                        fontWeight = FontWeight.W800,
+                        fontSize = 54.sp,
+                        lineHeight = 54.sp,
+                        color = if (above) c.onRight else c.onAmber,
+                    )
+                    Text(
+                        "%",
+                        fontFamily = Rounded,
+                        fontWeight = FontWeight.W700,
+                        fontSize = 24.sp,
+                        color = if (above) c.onRight else c.onAmber,
+                        modifier = Modifier.padding(bottom = 7.dp, start = 1.dp),
                     )
                 }
             }
+            Spacer(Modifier.height(16.dp))
+            Text("Odhad na skúške", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                masteredLine(mastered, total),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
             Spacer(Modifier.height(20.dp))
             ExamMeter(readiness.toFloat())
-            Spacer(Modifier.height(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Zvládnuté", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Text("$mastered z $total", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(8.dp))
-            MasteryBar(mastered, learning, total)
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Legend(MaterialTheme.colorScheme.primary, "$mastered zvládnuté")
-                Legend(c.learning, "$learning učíš sa")
-                Legend(MaterialTheme.colorScheme.surfaceContainerHighest, "${total - mastered - learning} nové")
-            }
         }
     }
 }
 
-@Composable
-private fun Legend(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
-        Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+/** "Máš zvládnutých 25 zo 70 otázok", with the participle agreeing with the number. */
+private fun masteredLine(n: Int, total: Int): String {
+    val z = if (total.toString().first() in "467") "zo" else "z"
+    return when (n) {
+        0 -> "Zatiaľ nemáš zvládnutú žiadnu $z $total otázok"
+        1 -> "Máš zvládnutú 1 $z $total otázok"
+        in 2..4 -> "Máš zvládnuté $n $z $total otázok"
+        else -> "Máš zvládnutých $n $z $total otázok"
     }
 }
 
@@ -430,7 +415,6 @@ private fun ActionTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    note: String? = null,
 ) {
     Surface(
         onClick = onClick,
@@ -445,9 +429,6 @@ private fun ActionTile(
             Text(title, style = MaterialTheme.typography.titleMedium, lineHeight = 20.sp)
             Spacer(Modifier.height(2.dp))
             Text(subtitle, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (note != null) {
-                Text(note, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
-            }
         }
     }
 }
