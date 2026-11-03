@@ -98,6 +98,13 @@ object Srs {
         else -> state.copy(lastSeenAt = now, lastWrong = false)
     }
 
+    /** Every answer of a finished mock exam moves its card exactly like an answer in a round. */
+    fun applyExam(progress: ProgressData, ids: List<Int>, wrong: Collection<Int>, now: Long): ProgressData {
+        val cards = progress.cards.toMutableMap()
+        for (id in ids) cards[id] = answer(progress.card(id), id !in wrong, now)
+        return progress.copy(cards = cards)
+    }
+
     /** Expected share of correct answers on the exam (questions are drawn uniformly from the pool). */
     fun readiness(ids: Collection<Int>, progress: ProgressData): Double =
         if (ids.isEmpty()) 0.0 else ids.sumOf { pCorrect(progress.card(it)) } / ids.size

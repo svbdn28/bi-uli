@@ -33,6 +33,9 @@ object Code {
             assignment.matches(t)
     }
 
+    private val letterCase = Regex("(?i)^(mal|veľk)(é|ý|á|ým|ou)$")
+    private val number = Regex("^[0-9]{1,6}$")
+
     private val assignment = Regex("^[A-Za-z_][A-Za-z0-9_]*=\\S*$")
 
     private data class Token(val start: Int, val end: Int, val core: String, val coreStart: Int)
@@ -75,6 +78,23 @@ object Code {
                 else -> true
             }
         }
+        // "Veľké L = Lock, malé l = login": a single letter named as a letter is an option name, set in mono
+        // so l never reads as I. ("malé a veľké písmená" keeps its conjunction.)
+        for ((i, t) in toks.withIndex()) {
+            if (code[i] || i == 0 || t.core.length != 1 || !t.core[0].isLetter() || t.start != t.coreStart) continue
+            if (!letterCase.matches(toks[i - 1].core)) continue
+            val next = toks.getOrNull(i + 1)?.core
+            val conjunction = t.core[0] in "aiouvksz" && next != null && next.first().isLetter()
+            if (!conjunction) code[i] = true
+        }
+        // A number right after a flag or a command is its argument: "test $USERS -eq 5", "chmod 4755".
+        for (i in 1 until toks.size) {
+            val t = toks[i]
+            val prev = toks[i - 1]
+            if (code[i] || !code[i - 1] || endsClause(text, prev) || t.start != t.coreStart) continue
+            if (!number.matches(t.core)) continue
+            if (prev.core.startsWith("-") || prev.core in commands || number.matches(prev.core)) code[i] = true
+        }
         val ranges = mutableListOf<IntRange>()
         var i = 0
         while (i < toks.size) {
@@ -95,15 +115,16 @@ object Code {
     private const val WORD_JOINER = '\u2060'
 
     /**
-     * Inline code that must not break inside a path or flag: a word joiner after every "/" and "-"
-     * ("/usr/bin/program" moves to the next line whole instead of "/ usr"). Short code keeps its
+     * Inline code that must not break inside a path, flag or operator: a word joiner after every symbol
+     * ("/usr/bin/program" moves to the next line whole instead of "/ usr", "!=" never splits). Short code keeps its
      * spaces unbreakable too; long code may still wrap at a space.
      */
     fun unbreakable(code: String, keepTogether: Int = 24): String = buildString(code.length + 8) {
         val glueSpaces = code.length <= keepTogether
         for (ch in code) {
             append(if (ch == ' ' && glueSpaces) '\u00A0' else ch)
-            if (ch == '/' || ch == '-') append(WORD_JOINER)
+            // After any symbol, not just "/" and "-": "!=" must never end a line on "!".
+            if (!ch.isLetterOrDigit() && !ch.isWhitespace()) append(WORD_JOINER)
         }
     }
 

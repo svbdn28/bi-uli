@@ -20,4 +20,18 @@ if [ -n "$hits" ]; then
   exit 1
 fi
 
+echo "== mono without ligatures (JetBrains Mono would draw != as a single sign)"
+theme=app/src/main/java/dev/hamper/uli/ui/theme/Theme.kt
+grep -q 'const val MONO_FEATURES = ".*liga 0.*calt 0' "$theme" || { echo "MONO_FEATURES must switch off liga and calt"; exit 1; }
+# Every mono style is built in Theme.kt (monoStyle / monoSpan, both with MONO_FEATURES); nobody else sets the family.
+hits=$(grep -rnE 'import dev\.hamper\.uli\.ui\.theme\.Mono$|fontFamily = Mono\b' app/src/main --include='*.kt' | grep -v "ui/theme/Theme.kt" || true)
+if [ -n "$hits" ]; then
+  echo "Mono set outside monoStyle/monoSpan:"
+  echo "$hits"
+  exit 1
+fi
+mono_defs=$(grep -c 'fontFamily = Mono, fontFeatureSettings = MONO_FEATURES' "$theme")
+mono_all=$(grep -c 'fontFamily = Mono' "$theme")
+[ "$mono_defs" = "$mono_all" ] || { echo "A Mono style in Theme.kt lacks MONO_FEATURES"; exit 1; }
+
 echo "gate OK"

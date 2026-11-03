@@ -68,6 +68,14 @@ class ContentTest {
         assertEquals(listOf("cp"), marked("When using the cp command, you must provide both", true))
         assertEquals(listOf("-S", "-r", "ls -Sr"), marked("-S triedi podľa veľkosti. Opačné poradie dostaneš pridaním -r (ls -Sr).", false))
         assertFalse(marked("Free as in freedom, not free beer.", false).isNotEmpty())
+        // A numeric argument stays inside the command (Q41).
+        assertEquals(listOf("-eq", "test \$USERS -eq 5"), marked("-eq porovnáva celé čísla, takže test \$USERS -eq 5 je pravda.", false))
+        assertEquals(listOf("chmod 4755"), marked("Spusti chmod 4755 na program.", false))
+        // A letter named as a letter is code (Q61, Q27, Q58); the conjunction in "malé a veľké" is not.
+        assertEquals(listOf("L", "l"), marked("Veľké L = Lock, malé l = login (premenovanie).", false))
+        assertEquals(listOf("S"), marked("Veľké S = Size, najväčší navrchu.", false))
+        assertEquals(listOf("g", "G"), marked("Malé g: jedna primárna. Veľké G: viac doplnkových.", false))
+        assertTrue(marked("mieša malé a veľké písmená a symboly", false).isEmpty())
     }
 
     @Test
@@ -75,6 +83,7 @@ class ContentTest {
         val wj = '\u2060'
         assertEquals("/${wj}usr/${wj}bin/${wj}program", Code.unbreakable("/usr/bin/program"))
         assertEquals("ls\u00A0-${wj}l", Code.unbreakable("ls -l"))
+        assertEquals("!${wj}=${wj}", Code.unbreakable("!="))
         val long = Code.unbreakable("sudo chmod 4755 /usr/bin/program")
         assertTrue(long.contains(' '))
         assertEquals("16384 Nov 3 /${wj}usr/${wj}bin", Code.gluePaths("16384 Nov 3 /usr/bin"))

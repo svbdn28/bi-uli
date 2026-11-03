@@ -16,11 +16,13 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -160,8 +162,29 @@ val Sans = FontFamily(sans(400), sans(500), sans(600), sans(700), sans(800))
 /** Big numbers and headlines: the same family with fully rounded terminals. */
 val Rounded = FontFamily(sans(500, 100f), sans(600, 100f), sans(700, 100f), sans(800, 100f), sans(900, 100f))
 
-/** Commands, paths and the mini terminal. */
+/** Commands, paths and the mini terminal. Never set it on its own: use [monoStyle] or [monoSpan]. */
 val Mono = FontFamily(mono(400), mono(500), mono(700))
+
+/**
+ * JetBrains Mono draws `!=` as `≠`, `->` as an arrow, `&&`, `||`, `#!`, `::`, `<=`, `>=` as ligatures.
+ * Shell code has to show the characters you type, so every mono run switches them off.
+ * (scripts/gate.sh fails if Mono is set as a font family anywhere outside this file.)
+ */
+const val MONO_FEATURES = "liga 0, calt 0, dlig 0"
+
+fun monoStyle(
+    fontSize: TextUnit = TextUnit.Unspecified,
+    fontWeight: FontWeight? = null,
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    color: Color = Color.Unspecified,
+) = TextStyle(fontFamily = Mono, fontFeatureSettings = MONO_FEATURES, fontSize = fontSize, fontWeight = fontWeight, lineHeight = lineHeight, color = color)
+
+fun monoSpan(
+    fontSize: TextUnit = TextUnit.Unspecified,
+    fontWeight: FontWeight? = null,
+    background: Color = Color.Unspecified,
+    color: Color = Color.Unspecified,
+) = SpanStyle(fontFamily = Mono, fontFeatureSettings = MONO_FEATURES, fontSize = fontSize, fontWeight = fontWeight, background = background, color = color)
 
 private val base = Typography()
 

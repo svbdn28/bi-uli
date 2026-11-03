@@ -91,15 +91,17 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import dev.hamper.uli.AppViewModel
 import dev.hamper.uli.QuizState
 import dev.hamper.uli.engine.Code
 import dev.hamper.uli.engine.Kind
 import dev.hamper.uli.engine.Question
-import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.QuestionStyle
 import dev.hamper.uli.ui.theme.Rounded
 import dev.hamper.uli.ui.theme.Uli
+import dev.hamper.uli.ui.theme.monoStyle
 
 @Composable
 fun QuizScreen(vm: AppViewModel) {
@@ -141,9 +143,21 @@ fun QuizScreen(vm: AppViewModel) {
                 onSubmit = { vm.submit(); haptic() },
                 onNext = vm::next,
                 frozen = vm.shotMode,
+                comesBack = if (state.answered) comesBack(vm, state) else null,
             )
         }
     }
+}
+
+/** When the card just answered shows up again: later in this round after a miss, or its next due time. */
+private fun comesBack(vm: AppViewModel, state: QuizState): String? {
+    val r = state.round
+    val id = r.queue.getOrNull(r.index) ?: return null
+    if (!state.correct) {
+        val next = (r.index + 1 until r.queue.size).firstOrNull { r.queue[it] == id } ?: return null
+        return comesBackAfter(next - r.index)
+    }
+    return comesBackIn(vm.progress.card(id).dueAt - vm.clock())
 }
 
 @Composable
@@ -164,14 +178,31 @@ private fun RoundTopBar(s: QuizState, onClose: () -> Unit, animate: Boolean) {
         IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Zavrieť kolo") }
         SegmentedProgress(segments, Modifier.weight(1f).padding(horizontal = 6.dp), animate = animate)
         Spacer(Modifier.width(10.dp))
-        // Corrections do not pretend to be the next card: they count on their own.
+        // Corrections do not pretend to be the next card: they say how many missed cards are still waiting,
+        // a number that only falls as you fix them.
+        val left = r.toFix(s.answered)
         Text(
-            if (r.isRetry) "Oprava ${r.retryNumber} z ${r.retryTotal}" else "${r.displayNumber}/${r.total}",
+            when {
+                !r.isRetry -> "${r.displayNumber}/${r.total}"
+                left == 0 -> "Opravené"
+                else -> "Oprava · ešte $left"
+            },
             fontFamily = Rounded,
             fontWeight = FontWeight.W700,
             fontSize = if (r.isRetry) 15.sp else 17.sp,
-            color = if (r.isRetry) Uli.colors.wrong else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = when {
+                !r.isRetry -> MaterialTheme.colorScheme.onSurfaceVariant
+                left == 0 -> Uli.colors.right
+                else -> Uli.colors.wrong
+            },
             maxLines = 1,
+            modifier = Modifier.semantics {
+                contentDescription = when {
+                    !r.isRetry -> "Otázka ${r.displayNumber} z ${r.total}"
+                    left == 0 -> "Oprava, všetko opravené"
+                    else -> "Oprava, na opravu ostáva $left"
+                }
+            },
         )
     }
 }
@@ -188,6 +219,7 @@ private fun QuestionBody(
     onSubmit: () -> Unit,
     onNext: () -> Unit,
     frozen: Boolean,
+    comesBack: String? = null,
 ) {
     val answered = state.answered && isCurrent
     val selected = if (isCurrent) state.selected else emptySet()
@@ -199,6 +231,30 @@ private fun QuestionBody(
     // When the question and its options do not fit (long text, SK line, big font scale), the card drops
     // its decoration so the options get the room. Decided once per question, so nothing jumps later.
     var compact by remember(q.id) { mutableStateOf(false) }
+    // A right answer's verdict grows into whatever room the sheet leaves, so the win fills the frame instead
+    // of a gap. Measured once, after the sheet has settled (no feedback loop), then animated into place.
+    val heroOn = answered && state.correct
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val room = remember(q.id) { IntArray(1) } // spare px under everything, as if the hero had no extra height
+    var heroTarget by remember(q.id) { androidx.compose.runtime.mutableIntStateOf(0) }
+    val heroPx by androidx.compose.animation.core.animateIntAsState(
+        heroTarget,
+        if (frozen) tween(0) else spring(dampingRatio = 0.8f, stiffness = 300f),
+        label = "hero",
+    )
+    LaunchedEffect(heroOn) {
+        if (!heroOn) { heroTarget = 0; return@LaunchedEffect }
+        // Wait until the sheet and the options that drop out have stopped moving (the room stops changing).
+        var last = Int.MIN_VALUE
+        var still = 0
+        var frames = 0
+        while (still < 8 && frames < 150) {
+            androidx.compose.runtime.withFrameNanos { }
+            frames++
+            if (room[0] == last) still++ else { still = 0; last = room[0] }
+        }
+        heroTarget = room[0].coerceIn(0, with(density) { 360.dp.roundToPx() })
+    }
 
     // Before the answer the question card takes the spare height; after it, the feedback sheet does.
     val cardShare by animateFloatAsState(if (answered) 0f else 1f, motion.defaultSpatialSpec(), label = "share")
@@ -218,8 +274,9 @@ private fun QuestionBody(
                     minHeight = viewport,
                     gap = 12.dp,
                     topShare = cardShare,
-                    fillColor = if (answered) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
+                    spareBetween = true,
                     onOverflow = { if (!answered && isCurrent) compact = true },
+                    onSpare = { d -> room[0] = d + heroPx },
                     top = {
                         QuestionCard(
                             q = q,
@@ -282,7 +339,7 @@ private fun QuestionBody(
                                 enter = expandVertically(motion.defaultSpatialSpec()) + fadeIn(motion.defaultEffectsSpec()),
                                 exit = shrinkVertically() + fadeOut(),
                             ) {
-                                FeedbackPanel(q = q, correct = state.correct, streak = state.round.streak, modifier = Modifier.padding(top = 12.dp))
+                                FeedbackPanel(q = q, correct = state.correct, streak = state.round.streak, comesBack = comesBack, frozen = frozen, hero = with(density) { heroPx.toDp() }, modifier = Modifier.padding(top = 12.dp))
                             }
                             if (!answered) Spacer(Modifier.height(if (multi) 8.dp else 12.dp))
                         }
@@ -329,9 +386,10 @@ private fun QuestionBody(
 
 /**
  * A column at least [minHeight] tall. The leftover space goes to [top] while [topShare] is 1 (the question
- * card grows, so [bottom] hugs the lower edge, in thumb reach) and to a strip of [fillColor] under
- * [bottom] while it is 0 (the feedback sheet runs down to the pinned button). Taller content just scrolls,
- * and [onOverflow] hears about it.
+ * card grows, so [bottom] hugs the lower edge, in thumb reach). What [top] gives back as [topShare] falls
+ * opens as a gap above [bottom] when [spareBetween] (the answer and its sheet stay down on the pinned
+ * button, sized to their content) or below it otherwise. Taller content just scrolls, and [onOverflow]
+ * hears about it; [onSpare] hears how much room is left (negative when short).
  */
 @Composable
 fun FillColumn(
@@ -340,32 +398,34 @@ fun FillColumn(
     top: @Composable () -> Unit,
     bottom: @Composable () -> Unit,
     topShare: Float = 1f,
-    fillColor: Color = Color.Transparent,
+    spareBetween: Boolean = false,
     onOverflow: (() -> Unit)? = null,
     exactTop: Boolean = false,
+    onSpare: ((Int) -> Unit)? = null,
 ) {
     Layout(
         content = {
             Box(propagateMinConstraints = true) { top() }
             Box { bottom() }
-            Box(Modifier.background(fillColor))
         },
     ) { m, c ->
         val w = c.maxWidth
         val b = m[1].measure(Constraints(minWidth = w, maxWidth = w))
         val g = gap.roundToPx()
         val natural = m[0].minIntrinsicHeight(w)
-        if (natural + g + b.height > minHeight.roundToPx()) onOverflow?.invoke()
-        val spare = (minHeight.roundToPx() - b.height - g - natural).coerceAtLeast(0)
+        val min = minHeight.roundToPx()
+        if (natural + g + b.height > min) onOverflow?.invoke()
+        val spare = (min - b.height - g - natural).coerceAtLeast(0)
         val th = natural + (spare * topShare).toInt()
         // exactTop bounds the top too, so a weighted child inside it can take the spare height.
         val t = m[0].measure(Constraints(minWidth = w, maxWidth = w, minHeight = th, maxHeight = if (exactTop) th else Constraints.Infinity))
-        val rest = (minHeight.roundToPx() - t.height - g - b.height).coerceAtLeast(0)
-        val f = m[2].measure(Constraints.fixed(w, rest))
+        val rest = (min - t.height - g - b.height).coerceAtLeast(0)
+        val between = if (spareBetween) rest else 0
+        // Signed: room left over (or missing) under everything, for content that can grow into it.
+        onSpare?.invoke(min - (t.height + g + b.height))
         layout(w, t.height + g + b.height + rest) {
             t.place(0, 0)
-            b.place(0, t.height + g)
-            f.place(0, t.height + g + b.height)
+            b.place(0, t.height + g + between)
         }
     }
 }
@@ -526,12 +586,10 @@ private fun PromptMark(frozen: Boolean, size: Dp = 68.dp) {
                 .background(c.amber),
         )
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(">", fontFamily = Mono, fontWeight = FontWeight.W700, fontSize = 22.sp, color = c.onAmber)
+            Text(">", style = monoStyle(fontSize = 22.sp, fontWeight = FontWeight.W700), color = c.onAmber)
             Text(
                 "_",
-                fontFamily = Mono,
-                fontWeight = FontWeight.W700,
-                fontSize = 22.sp,
+                style = monoStyle(fontSize = 22.sp, fontWeight = FontWeight.W700),
                 color = c.onAmber,
                 modifier = Modifier.graphicsLayer { alpha = if (frozen) 1f else blink },
             )
@@ -614,61 +672,200 @@ fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit, modifi
 }
 
 /**
- * The why, as a sheet that scrolls with the question, built to be read at a glance: the verdict and the
- * one fact to keep (the memory hook) as a single block, then the reasoning set smaller and quieter, then
- * the terminal. Two weights of type, one box.
+ * The why, as a sheet in clearly separated blocks: the verdict (and when the card comes back), the one fact
+ * to keep, why the right answer is right, then the terminal. Why your own pick is wrong sits on that pick,
+ * above. Body text is full size; only the labels are small.
  */
 @Composable
-private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, modifier: Modifier = Modifier) {
-    val c = Uli.colors
-    val accent = if (correct) c.right else c.wrong
+private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, comesBack: String?, frozen: Boolean, hero: Dp, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = scheme.surfaceContainer,
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 20.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
-                ShapeBadge(
-                    if (correct) Icons.Filled.Check else Icons.Filled.Close,
-                    if (correct) Shapes.verySunny else Shapes.puffy,
-                    accent,
-                    if (correct) c.onRight else c.onWrong,
-                    size = 36.dp,
-                    iconSize = 21.dp,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(Modifier.heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (correct) "Správne" else "Nesprávne",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = accent,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (correct && streak >= 3) {
-                            Tag("$streak za sebou", c.amber, c.onAmber)
-                        }
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 20.dp)) {
+            Verdict(correct, streak, comesBack, frozen, hero)
+            q.hook?.let {
+                Spacer(Modifier.height(14.dp))
+                Hook(it)
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Prečo",
+                style = MaterialTheme.typography.labelLarge,
+                color = scheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            CodeText(
+                q.explanation,
+                MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 25.sp),
+                color = scheme.onSurface,
+            )
+            q.demo?.let {
+                Spacer(Modifier.height(18.dp))
+                Terminal(it)
+            }
+            q.disputedNote?.let {
+                Spacer(Modifier.height(14.dp))
+                Disputed(it)
+            }
+        }
+    }
+}
+
+/**
+ * The verdict, big enough to read from a still frame. A right answer gets a sun that pops in with a small
+ * burst of shapes that stays around it, and the streak; a wrong one a puff. Under it, when the card comes back.
+ * [extra] is spare height under the sheet: a right answer with enough of it becomes a centered celebration.
+ */
+@Composable
+private fun Verdict(correct: Boolean, streak: Int, comesBack: String?, frozen: Boolean, extra: Dp = 0.dp) {
+    val c = Uli.colors
+    val accent = if (correct) c.right else c.wrong
+    // The box height comes from [extra] alone, so switching layouts inside never feeds back into it; it is a
+    // minimum, so large font sizes still get every line.
+    val rowHeight = if (correct) 76.dp else 56.dp
+    val total = rowHeight + extra
+    // The centered layout is the badge (76 dp at scale 1) plus about 80 dp of text; it scales up to 1.45.
+    val big = correct && total >= 158.dp
+    val scale = ((total.value - 82f) / 76f).coerceIn(1f, 1.45f)
+    Box(Modifier.fillMaxWidth().heightIn(min = rowHeight + extra), contentAlignment = Alignment.Center) {
+        if (big) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                VerdictBadge(correct = true, frozen = frozen, scale = scale)
+                Text("Správne", style = MaterialTheme.typography.headlineLarge, color = accent, maxLines = 1)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (comesBack != null) {
+                        Text(comesBack, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    q.hook?.let { hook ->
-                        Spacer(Modifier.height(4.dp))
-                        CodeText(
-                            hook,
-                            MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.W600),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                    if (streak >= 2) {
+                        Spacer(Modifier.width(10.dp))
+                        Streak(streak)
                     }
                 }
             }
-            Spacer(Modifier.height(14.dp))
-            Explanation(
-                q,
-                emptyList(),
-                showHook = false,
-                prose = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
-                proseColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                gap = 14.dp,
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Some room but not enough for the centered layout: the sun and its burst grow into it.
+                VerdictBadge(correct, frozen, scale = if (correct) (total / rowHeight).coerceIn(1f, 1.6f) else 1f)
+                Spacer(Modifier.width(if (correct) 14.dp else 10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (correct) "Správne" else "Nesprávne",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = accent,
+                        maxLines = 1,
+                    )
+                    if (comesBack != null) {
+                        Text(comesBack, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (correct && streak >= 2) {
+                    Spacer(Modifier.width(8.dp))
+                    Streak(streak)
+                }
+            }
+        }
+    }
+}
+
+/** "5 za sebou" on an amber pill with a small sun: the streak, only when there is one. */
+@Composable
+private fun Streak(n: Int) {
+    val c = Uli.colors
+    Surface(color = c.amber, contentColor = c.onAmber, shape = CircleShape) {
+        Row(Modifier.padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(18.dp).clip(Shapes.sunny).background(c.onAmber), contentAlignment = Alignment.Center) {
+                Text("$n", fontFamily = Rounded, fontWeight = FontWeight.W800, fontSize = 11.sp, lineHeight = 11.sp, color = c.amber)
+            }
+            Spacer(Modifier.width(6.dp))
+            Text("za sebou", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun VerdictBadge(correct: Boolean, frozen: Boolean, scale: Float = 1f) {
+    val c = Uli.colors
+    val scheme = MaterialTheme.colorScheme
+    val pop = remember { Animatable(if (frozen) 1f else 0f) }
+    LaunchedEffect(Unit) { if (!frozen) pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 320f)) }
+    val burst = remember { Animatable(if (frozen) 1f else 0f) }
+    LaunchedEffect(Unit) { if (!frozen && correct) burst.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
+    val colors = listOf(c.amber, scheme.tertiary, c.right, c.learning, c.amber, scheme.tertiary, c.right, c.amber)
+    val shapes = listOf(Shapes.cookie6, Shapes.clover4, Shapes.sunny, Shapes.gem, Shapes.flower, Shapes.cookie6, Shapes.clover4, Shapes.gem)
+    val k = scale
+    Box(Modifier.size(if (correct) 76.dp * k else 56.dp), contentAlignment = Alignment.Center) {
+        if (correct) {
+            // Eight small shapes fly out from behind the sun and stay around it, so the frame still reads as a win.
+            for (i in 0 until 8) {
+                val angle = Math.toRadians(-100.0 + i * 45.0 + (i % 2) * 12.0)
+                val dist = (18f + 18f * burst.value + (i % 3) * 2f) * k
+                val size = (6 + (i % 3) * 2).dp * k
+                Box(
+                    Modifier
+                        .size(size)
+                        .graphicsLayer {
+                            translationX = (kotlin.math.cos(angle) * dist).toFloat() * density
+                            translationY = (kotlin.math.sin(angle) * dist).toFloat() * density
+                            rotationZ = burst.value * (90f + i * 30f)
+                            val sc = burst.value.coerceIn(0f, 1f)
+                            scaleX = sc
+                            scaleY = sc
+                        }
+                        .clip(shapes[i])
+                        .background(colors[i]),
+                )
+            }
+        }
+        Box(
+            Modifier
+                .size(if (correct) 46.dp * k else 44.dp)
+                .graphicsLayer {
+                    val sc = 0.6f + 0.4f * pop.value
+                    scaleX = sc
+                    scaleY = sc
+                    rotationZ = (1f - pop.value) * -60f
+                }
+                .clip(if (correct) Shapes.verySunny else Shapes.puffy)
+                .background(if (correct) c.right else c.wrong),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                if (correct) Icons.Filled.Check else Icons.Filled.Close,
+                null,
+                tint = if (correct) c.onRight else c.onWrong,
+                modifier = Modifier.size(24.dp * k),
             )
         }
     }
+}
+
+/** "Znova o 4 hodiny", "Znova zajtra": when a card answered right comes due again. */
+fun comesBackIn(ms: Long): String? {
+    if (ms <= 0) return null
+    val min = (ms + 59_999) / 60_000
+    if (min < 60) return "Znova o $min " + plural(min, "minútu", "minúty", "minút")
+    val h = (ms + 30 * 60_000) / 3_600_000
+    if (h < 24) return if (h == 1L) "Znova o hodinu" else "Znova o $h " + plural(h, "hodinu", "hodiny", "hodín")
+    val d = (ms + 12 * 3_600_000) / 86_400_000
+    return when (d) {
+        1L -> "Znova zajtra"
+        7L -> "Znova o týždeň"
+        else -> "Znova o $d " + plural(d, "deň", "dni", "dní")
+    }
+}
+
+/** "Vráti sa o 3 otázky": when a missed card comes back in this round. */
+fun comesBackAfter(questions: Int): String = when {
+    questions <= 1 -> "Vráti sa hneď ako ďalšia"
+    else -> "Vráti sa o $questions " + plural(questions.toLong(), "otázku", "otázky", "otázok")
+}
+
+private fun plural(n: Long, one: String, few: String, many: String) = when (n) {
+    1L -> one
+    in 2L..4L -> few
+    else -> many
 }

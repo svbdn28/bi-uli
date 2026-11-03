@@ -67,21 +67,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.foundation.shape.CircleShape
 import dev.hamper.uli.AppViewModel
 import dev.hamper.uli.ExamState
 import dev.hamper.uli.engine.Code
 import dev.hamper.uli.engine.Exam
+import dev.hamper.uli.engine.Srs
 import dev.hamper.uli.engine.Kind
 import dev.hamper.uli.engine.Question
-import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.QuestionStyle
 import dev.hamper.uli.ui.theme.Rounded
 import dev.hamper.uli.ui.theme.Uli
+import dev.hamper.uli.ui.theme.monoStyle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.rememberCoroutineScope
 import java.util.Locale
+import kotlin.math.roundToInt
 
 fun formatPoints(p: Double): String = String.format(Locale.ROOT, "%.1f", p).replace('.', ',').removeSuffix(",0")
 
@@ -115,9 +120,7 @@ fun ExamScreen(vm: AppViewModel) {
             Spacer(Modifier.width(4.dp))
             Text(
                 formatDuration(now - s.exam.startedAt),
-                fontFamily = Mono,
-                fontWeight = FontWeight.W500,
-                fontSize = 15.sp,
+                style = monoStyle(fontSize = 15.sp, fontWeight = FontWeight.W500),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -324,6 +327,7 @@ fun ExamEndScreen(vm: AppViewModel) {
                     }
                 }
             }
+            item { EstimateNote((Srs.readiness(vm.ids, vm.progress) * 100).roundToInt()) }
             if (res.wrong.isNotEmpty()) {
                 item {
                     Text(
@@ -339,6 +343,40 @@ fun ExamEndScreen(vm: AppViewModel) {
         }
         StatusBarScrim(list.canScrollBackward)
         BottomActions(primary = "Hotovo", onPrimary = vm::home, secondary = "Nová skúška", onSecondary = vm::startExam, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+/**
+ * The exam score and the estimate on Domov answer different questions, so they can differ (80/80 here,
+ * 56 % there). Said right under the score, with the estimate itself, so the two screens never contradict.
+ */
+@Composable
+private fun EstimateNote(pct: Int) {
+    val c = Uli.colors
+    val above = pct >= 80
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 14.dp, end = 16.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(58.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize().clip(Shapes.cookie12).background(if (above) c.right else c.amber))
+                Text(
+                    "$pct %",
+                    fontFamily = Rounded,
+                    fontWeight = FontWeight.W800,
+                    fontSize = 14.sp,
+                    color = if (above) c.onRight else c.onAmber,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Odhad na skúške je teraz $pct %", style = MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp))
+                Text(
+                    "Rastie, keď odpoveď vydrží aj o pár hodín a dní. Jedna dobrá skúška ho len posunie.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -376,7 +414,7 @@ fun ReviewItem(q: Question, picked: Set<Int>?, shape: androidx.compose.ui.graphi
         onClick = { open = !open },
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().semantics { stateDescription = if (open) "Rozbalené" else "Zbalené" },
     ) {
         Column(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()).padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
@@ -386,13 +424,14 @@ fun ReviewItem(q: Question, picked: Set<Int>?, shape: androidx.compose.ui.graphi
                     english = true,
                     modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(8.dp))
-                Icon(
-                    Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (open) "Zbaliť" else "Rozbaliť",
-                    modifier = Modifier.rotate(if (open) 180f else 0f),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Spacer(Modifier.width(10.dp))
+                // The whole row opens it; the pill only says so.
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurfaceVariant, shape = CircleShape) {
+                    Row(Modifier.padding(start = 10.dp, end = 4.dp, top = 3.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (open) "Skryť" else "Prečo", style = MaterialTheme.typography.labelLarge)
+                        Icon(Icons.Filled.KeyboardArrowDown, null, modifier = Modifier.size(20.dp).rotate(if (open) 180f else 0f))
+                    }
+                }
             }
             if (open) {
                 Spacer(Modifier.height(12.dp))

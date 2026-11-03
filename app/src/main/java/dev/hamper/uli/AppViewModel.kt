@@ -274,9 +274,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val res = e.result(byId)
         val now = clock()
         // The mock exam is real practice: every answer moves its card like in a round.
-        val cards = progress.cards.toMutableMap()
-        for (id in e.ids) cards[id] = Srs.answer(progress.card(id), id !in res.wrong, now)
-        persist(progress.copy(cards = cards))
+        persist(Srs.applyExam(progress, e.ids, res.wrong, now))
         examSummary = ExamSummary(res, e)
         exam = null
         saveSession()

@@ -13,28 +13,56 @@ class SessionsTest {
     )
 
     @Test
-    fun retryCardsCountAsCorrectionsNotAsTheNextNumber() {
+    fun correctionCounterCountsCardsLeftToFix() {
         var r = Round(ids = listOf(1, 2, 3, 4, 5))
-        assertEquals(0, r.retryNumber)
-        r = r.answer(false).next() // 1 wrong, comes back after 3
-        r = r.answer(false).next() // 2 wrong, comes back after 4
-        assertEquals(2, r.retryTotal)
+        assertEquals(0, r.toFix(answered = false))
+        r = r.answer(false)
+        assertEquals(1, r.toFix(answered = true)) // 1 missed: one to fix
+        r = r.next().answer(false).next() // 2 missed
         r = r.answer(true).next() // 3
         assertEquals(1, r.current)
         assertTrue(r.isRetry)
-        assertEquals(1, r.retryNumber)
-        assertEquals(2, r.retryTotal)
-        r = r.answer(false) // 1 wrong again: a third correction is planned
-        assertEquals(3, r.retryTotal)
+        assertEquals(2, r.toFix(answered = false))
+        r = r.answer(false) // missing a correction keeps the same card waiting: still 2
+        assertEquals(2, r.toFix(answered = true))
         r = r.next()
-        assertEquals(listOf(1, 2, 3, 1, 2, 4, 1, 5), r.queue)
         assertEquals(2, r.current)
-        assertEquals(2, r.retryNumber)
-        r = r.answer(true).next() // 2 fixed
-        r = r.answer(true).next() // 4
+        assertEquals(2, r.toFix(answered = false))
+        r = r.answer(true) // 2 fixed
+        assertEquals(1, r.toFix(answered = true))
+        r = r.next().answer(true).next() // 4
         assertEquals(1, r.current)
-        assertEquals(3, r.retryNumber)
-        assertEquals(3, r.retryTotal)
+        r = r.answer(true) // 1 fixed: nothing left
+        assertEquals(0, r.toFix(answered = true))
+    }
+
+    @Test
+    fun correctionCounterNeverClimbsDuringAnAllWrongRound() {
+        // Every first try wrong, every correction wrong twice before it sticks: the counter on correction
+        // cards may only stay or fall, and never shows more cards than were missed.
+        var r = Round(ids = (1..10).toList())
+        val misses = mutableMapOf<Int, Int>()
+        var lastOnRetry = Int.MAX_VALUE
+        var firstTriesLeft = true
+        while (!r.isFinished) {
+            val id = r.current!!
+            if (r.isRetry) {
+                if (firstTriesLeft && r.queue.subList(r.index, r.queue.size).none { it !in r.firstAttempt }) {
+                    firstTriesLeft = false
+                    lastOnRetry = Int.MAX_VALUE
+                }
+                val n = r.toFix(answered = false)
+                assertTrue(n in 1..r.firstAttempt.count { !it.value })
+                if (!firstTriesLeft) assertTrue("counter climbed: $n after $lastOnRetry", n <= lastOnRetry)
+                lastOnRetry = n
+                val m = misses.getOrDefault(id, 0)
+                misses[id] = m + 1
+                r = r.answer(m >= 2).next()
+            } else {
+                r = r.answer(false).next()
+            }
+        }
+        assertEquals(0, r.score)
     }
 
     @Test

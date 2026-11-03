@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -70,9 +71,9 @@ import androidx.compose.ui.unit.sp
 import dev.hamper.uli.AppViewModel
 import dev.hamper.uli.engine.Srs
 import dev.hamper.uli.engine.Topic
-import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.Rounded
 import dev.hamper.uli.ui.theme.Uli
+import dev.hamper.uli.ui.theme.monoStyle
 import kotlin.math.roundToInt
 
 @Composable
@@ -91,122 +92,143 @@ fun HomeScreen(vm: AppViewModel) {
     val newInRound = preview.count { progress.card(it).isNew }
     var confirmReset by remember { mutableStateOf(false) }
     var confirmDiscardExam by remember { mutableStateOf(false) }
+    var confirmDiscardRound by remember { mutableStateOf(false) }
 
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val list = rememberLazyListState()
-    Box(Modifier.fillMaxSize()) {
-        // Header, one hero (the estimate against the 80 % line), three shortcuts, then the topics. Nothing is
-        // stretched to the viewport: the hero keeps its natural height, so the first topic rows peek above
-        // the action bar and the fold falls inside a list that obviously continues.
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            state = list,
-            // The bottom padding reserves the whole action bar, so the last topic ends above it.
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = bottom + 128.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item { Header(onReset = { confirmReset = true }) }
-            if (openExam != null) {
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            // Header, a compact estimate against the 80 % line, the three modes as full-width rows, then the
+            // topics. The list ends above the action area instead of running under it.
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                state = list,
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item { Header(onReset = { confirmReset = true }) }
+                if (openExam != null) {
+                    item {
+                        OpenExamCard(
+                            answered = openExam.exam.index,
+                            total = openExam.exam.ids.size,
+                            onResume = vm::resumeExam,
+                            onDiscard = { confirmDiscardExam = true },
+                        )
+                    }
+                }
+                item { ReadinessSummary(readiness, mastered, ids.size) }
                 item {
-                    OpenExamCard(
-                        answered = openExam.exam.index,
-                        total = openExam.exam.ids.size,
-                        onResume = vm::resumeExam,
-                        onDiscard = { confirmDiscardExam = true },
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        ModeRow(
+                            title = "Skúška nanečisto",
+                            detail = if (openExam != null) examProgress(openExam.exam.index, openExam.exam.ids.size) else "50 otázok",
+                            icon = UliIcons.Timer,
+                            badge = Shapes.clover4,
+                            container = MaterialTheme.colorScheme.tertiaryContainer,
+                            content = MaterialTheme.colorScheme.onTertiaryContainer,
+                            onClick = if (openExam != null) vm::resumeExam else vm::startExam,
+                            shape = groupShape(0, 3),
+                        )
+                        ModeRow(
+                            title = "Chyby",
+                            detail = if (drill == 0) "Zatiaľ žiadne" else "$drill ${questionsWord(drill)}",
+                            icon = UliIcons.Replay,
+                            badge = Shapes.softBurst,
+                            container = Uli.colors.wrongContainer,
+                            content = Uli.colors.onWrongContainer,
+                            // A Chyby round replaces the open round, so it asks first.
+                            onClick = { if (openRound != null) confirmDiscardRound = true else vm.startMistakes() },
+                            enabled = drill > 0,
+                            shape = groupShape(1, 3),
+                        )
+                        ModeRow(
+                            title = "Všetky otázky",
+                            detail = "${ids.size} otázok",
+                            icon = UliIcons.Stack,
+                            badge = Shapes.cookie6,
+                            container = MaterialTheme.colorScheme.secondaryContainer,
+                            content = MaterialTheme.colorScheme.onSecondaryContainer,
+                            onClick = { vm.openBrowse() },
+                            shape = groupShape(2, 3),
+                        )
+                    }
+                }
+                item {
+                    Text(
+                        "Témy",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(start = 8.dp, top = 8.dp),
                     )
                 }
-            }
-            item { ReadinessHero(readiness, mastered, ids.size) }
-            item {
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ActionTile(
-                        title = "Skúška nanečisto",
-                        subtitle = if (openExam != null) examProgress(openExam.exam.index, openExam.exam.ids.size) else "50 otázok",
-                        icon = UliIcons.Timer,
-                        shape = Shapes.clover4,
-                        container = MaterialTheme.colorScheme.tertiaryContainer,
-                        content = MaterialTheme.colorScheme.onTertiaryContainer,
-                        onClick = if (openExam != null) vm::resumeExam else vm::startExam,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionTile(
-                        title = "Chyby",
-                        subtitle = if (drill == 0) "Zatiaľ žiadne" else "$drill ${questionsWord(drill)}",
-                        icon = UliIcons.Replay,
-                        shape = Shapes.softBurst,
-                        container = Uli.colors.wrongContainer,
-                        content = Uli.colors.onWrongContainer,
-                        onClick = vm::startMistakes,
-                        enabled = drill > 0,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionTile(
-                        title = "Všetky otázky",
-                        subtitle = "${ids.size} otázok",
-                        icon = UliIcons.Stack,
-                        shape = Shapes.cookie6,
-                        container = MaterialTheme.colorScheme.secondaryContainer,
-                        content = MaterialTheme.colorScheme.onSecondaryContainer,
-                        onClick = { vm.openBrowse() },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            item {
-                Text(
-                    "Témy",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 8.dp, top = 6.dp),
-                )
-            }
-            item {
-                val topics = Topic.entries
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    topics.forEachIndexed { i, t ->
-                        val tIds = vm.questions.filter { it.topicEnum == t }.map { it.id }
-                        val m = tIds.count { progress.card(it).isMastered }
-                        val l = tIds.count { progress.card(it).let { c -> !c.isNew && !c.isMastered } }
-                        TopicRow(t.title, m, l, tIds.size, groupShape(i, topics.size), onClick = { vm.openBrowse(t) })
+                item {
+                    val topics = Topic.entries
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        topics.forEachIndexed { i, t ->
+                            val tIds = vm.questions.filter { it.topicEnum == t }.map { it.id }
+                            val m = tIds.count { progress.card(it).isMastered }
+                            val l = tIds.count { progress.card(it).let { c -> !c.isNew && !c.isMastered } }
+                            TopicRow(t.title, m, l, tIds.size, groupShape(i, topics.size), onClick = { vm.openBrowse(t) })
+                        }
                     }
                 }
             }
-        }
-
-        StatusBarScrim(list.canScrollBackward)
-
-        // The one big action lives in the thumb zone, on a solid bar: the list ends behind a short fade
-        // above it instead of ghosting through.
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            StatusBarScrim(list.canScrollBackward)
+            // The list continues: a short fade where it meets the action area.
+            val more by androidx.compose.animation.core.animateFloatAsState(if (list.canScrollForward) 1f else 0f, label = "more")
             Box(
                 Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(20.dp)
+                    .height(18.dp)
+                    .graphicsLayer { alpha = more }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))),
             )
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 12.dp),
-            ) {
-                ContinueButton(
-                    title = when {
-                        openRound != null -> "Pokračovať"
-                        vm.isFresh -> "Začať"
-                        else -> "Ďalšie kolo"
-                    },
-                    subtitle = when {
-                        openRound != null -> "Rozrobené kolo, otázka ${openRound.round.displayNumber} z ${openRound.round.total}"
-                        vm.isFresh -> "Prvých ${preview.size} otázok, od úvodu do Linuxu"
-                        else -> roundSubtitle(dueInRound, newInRound, preview.size)
-                    },
-                    onClick = vm::continueOrStart,
-                )
-            }
         }
+
+        // The one big action has its own reserved area in the thumb zone; nothing scrolls under it.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .navigationBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+        ) {
+            ContinueButton(
+                title = when {
+                    openRound != null -> "Pokračovať"
+                    vm.isFresh -> "Začať"
+                    else -> "Ďalšie kolo"
+                },
+                subtitle = when {
+                    openRound != null -> "Rozrobené kolo, otázka ${openRound.round.displayNumber} z ${openRound.round.total}"
+                    vm.isFresh -> "Prvých ${preview.size} otázok, od úvodu do Linuxu"
+                    else -> roundSubtitle(dueInRound, newInRound, preview.size)
+                },
+                onClick = vm::continueOrStart,
+            )
+        }
+    }
+
+    if (confirmDiscardRound && openRound != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscardRound = false },
+            title = { Text("Rozrobené kolo sa zahodí") },
+            text = {
+                Text(
+                    "Si na otázke ${openRound.round.displayNumber} z ${openRound.round.total}. Chyby začnú nové kolo a toto sa zahodí. " +
+                        "Odpovede, ktoré si už dal, ostanú započítané.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDiscardRound = false; vm.startMistakes() }) {
+                    Text("Zahodiť a začať Chyby", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDiscardRound = false }) { Text("Nechať kolo") } },
+        )
     }
 
     if (confirmDiscardExam) {
@@ -272,7 +294,7 @@ private fun Header(onReset: () -> Unit) {
             Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Uli.colors.amber),
             contentAlignment = Alignment.Center,
         ) {
-            Text(">_", fontFamily = Mono, fontWeight = FontWeight.W700, fontSize = 17.sp, color = Uli.colors.onAmber)
+            Text(">_", style = monoStyle(fontSize = 17.sp, fontWeight = FontWeight.W700), color = Uli.colors.onAmber)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -292,71 +314,66 @@ private fun Header(onReset: () -> Unit) {
     }
 }
 
-/** The one hero: the exam estimate on a cookie, the same number against the 80 % pass line, and plain words. */
+/**
+ * The estimate as a compact summary: the number on the amber cookie, what it is, how many questions are
+ * mastered, and the same number against the 80 % pass line.
+ */
 @Composable
-private fun ReadinessHero(readiness: Double, mastered: Int, total: Int) {
+private fun ReadinessSummary(readiness: Double, mastered: Int, total: Int) {
     val pct = (readiness * 100).roundToInt()
     val above = pct >= 80
     val c = Uli.colors
     val spin = remember { Animatable(-40f) }
     LaunchedEffect(Unit) { spin.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 120f)) }
     Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.fillMaxWidth()) {
-        Column(
-            Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(Modifier.size(136.dp), contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { rotationZ = spin.value }
-                        .clip(Shapes.cookie12)
-                        .background(if (above) c.right else c.amber),
-                )
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        "$pct",
-                        fontFamily = Rounded,
-                        fontWeight = FontWeight.W800,
-                        fontSize = 54.sp,
-                        lineHeight = 54.sp,
-                        color = if (above) c.onRight else c.onAmber,
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { rotationZ = spin.value }
+                            .clip(Shapes.cookie12)
+                            .background(if (above) c.right else c.amber),
                     )
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            "$pct",
+                            fontFamily = Rounded,
+                            fontWeight = FontWeight.W800,
+                            fontSize = 34.sp,
+                            lineHeight = 34.sp,
+                            color = if (above) c.onRight else c.onAmber,
+                        )
+                        Text(
+                            "%",
+                            fontFamily = Rounded,
+                            fontWeight = FontWeight.W700,
+                            fontSize = 16.sp,
+                            color = if (above) c.onRight else c.onAmber,
+                            modifier = Modifier.padding(bottom = 4.dp, start = 1.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Odhad na skúške", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(2.dp))
                     Text(
-                        "%",
-                        fontFamily = Rounded,
-                        fontWeight = FontWeight.W700,
-                        fontSize = 24.sp,
-                        color = if (above) c.onRight else c.onAmber,
-                        modifier = Modifier.padding(bottom = 7.dp, start = 1.dp),
+                        "Zvládnuté: $mastered ${zo(total)} $total otázok",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Text("Odhad na skúške", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                masteredLine(mastered, total),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(10.dp))
             ExamMeter(readiness.toFloat())
         }
     }
 }
 
-/** "Máš zvládnutých 25 zo 70 otázok", with the participle agreeing with the number. */
-private fun masteredLine(n: Int, total: Int): String {
-    val z = if (total.toString().first() in "467") "zo" else "z"
-    return when (n) {
-        0 -> "Zatiaľ nemáš zvládnutú žiadnu $z $total otázok"
-        1 -> "Máš zvládnutú 1 $z $total otázok"
-        in 2..4 -> "Máš zvládnuté $n $z $total otázok"
-        else -> "Máš zvládnutých $n $z $total otázok"
-    }
-}
+/** "z 50", but "zo 70" (sedemdesiat), "zo 40", "zo 60": the preposition follows the spoken number. */
+private fun zo(n: Int) = if (n.toString().first() in "467") "zo" else "z"
 
 /** Estimate on a 0 to 100 track with the pass line at 80 %. */
 @Composable
@@ -408,31 +425,41 @@ private fun MasteryBar(mastered: Int, learning: Int, total: Int) {
     }
 }
 
+/** One mode as a full-width row: its colored shape, a 17 sp label and the count, all one target. */
 @Composable
-private fun ActionTile(
+private fun ModeRow(
     title: String,
-    subtitle: String,
+    detail: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    shape: androidx.compose.ui.graphics.Shape,
+    badge: androidx.compose.ui.graphics.Shape,
     container: Color,
     content: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape,
     enabled: Boolean = true,
 ) {
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = MaterialTheme.shapes.large,
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier.fillMaxHeight(),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(14.dp).alpha(if (enabled) 1f else 0.5f)) {
-            ShapeBadge(icon, shape, container, content, size = 44.dp, iconSize = 22.dp)
-            Spacer(Modifier.height(14.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium, lineHeight = 20.sp)
-            Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            Modifier.heightIn(min = 64.dp).padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp).alpha(if (enabled) 1f else 0.5f),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ShapeBadge(icon, badge, container, content, size = 44.dp, iconSize = 22.dp)
+            Spacer(Modifier.width(14.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp), modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            Text(detail, style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }

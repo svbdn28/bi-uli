@@ -4,6 +4,7 @@ import dev.hamper.uli.engine.CardState
 import dev.hamper.uli.engine.Exam
 import dev.hamper.uli.engine.ProgressData
 import dev.hamper.uli.engine.Round
+import dev.hamper.uli.engine.Srs
 import dev.hamper.uli.engine.result
 import kotlin.random.Random
 
@@ -36,6 +37,10 @@ object Shots {
 
     private val roundIds = listOf(12, 30, 44, 67, 41, 2, 55, 61, 70, 35)
 
+    /** The progress right after answering [id], as the round would have saved it. */
+    private fun answered(data: ProgressData, id: Int, correct: Boolean) =
+        data.copy(cards = data.cards + (id to Srs.answer(data.card(id), correct, NOW)))
+
     fun apply(vm: AppViewModel, name: String) {
         val data = seededProgress(vm.ids)
         vm.enableSeededShuffle()
@@ -48,16 +53,18 @@ object Shots {
                     val pick = q.options.indexOfFirst { it.text.contains("2755") }
                     state = state.copy(round = r.answer(false), selected = setOf(pick), answered = true, correct = false)
                 }
-                vm.installShot(data, NOW, Screen.Quiz, quiz = state)
+                val shown = if (name == "q-wrong") answered(data, 67, false) else data
+                vm.installShot(shown, NOW, Screen.Quiz, quiz = state)
             }
             "q-right" -> {
                 val ids = listOf(3, 18, 21, 33, 52, 27, 60, 64, 14, 49)
-                var r = Round(ids)
-                // One early miss whose correction lands after Q27, so Q27 is a first attempt.
-                repeat(5) { r = r.answer(it != 4).next() }
+                // A miss on the first card, fixed three cards later, then a run: Q27 makes it five in a row.
+                var r = Round(ids).answer(false).next()
+                repeat(5) { r = r.answer(true).next() }
+                check(r.current == 27)
                 val q = vm.byId.getValue(27)
                 val state = QuizState(RoundKind.Smart, r.answer(true), vm.orderFor(q), selected = q.correctIndices, answered = true, correct = true)
-                vm.installShot(data, NOW, Screen.Quiz, quiz = state)
+                vm.installShot(answered(data, 27, true), NOW, Screen.Quiz, quiz = state)
             }
             "q-multi" -> {
                 val ids = listOf(8, 5, 22, 29, 36, 47, 53, 58, 62, 69)
@@ -81,7 +88,9 @@ object Shots {
                     } else q.correctIndices
                     e = e.answer(pick, NOW)
                 }
-                vm.installShot(data, NOW, Screen.ExamEnd, examSummary = ExamSummary(e.result(vm.byId), e))
+                // As after a real exam: the answers have already moved their cards.
+                val res = e.result(vm.byId)
+                vm.installShot(Srs.applyExam(data, e.ids, res.wrong, NOW), NOW, Screen.ExamEnd, examSummary = ExamSummary(res, e))
             }
             "browse" -> vm.installShot(data, NOW, Screen.Browse(expanded = 2))
             // Extra states for manual checks (not in the frozen capture list).

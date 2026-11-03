@@ -43,6 +43,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import dev.hamper.uli.AppViewModel
 import dev.hamper.uli.Screen
 import dev.hamper.uli.engine.CardState
@@ -50,9 +52,9 @@ import dev.hamper.uli.engine.Code
 import dev.hamper.uli.engine.Question
 import dev.hamper.uli.engine.Srs
 import dev.hamper.uli.engine.Topic
-import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.Rounded
 import dev.hamper.uli.ui.theme.Uli
+import dev.hamper.uli.ui.theme.monoStyle
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -134,7 +136,8 @@ private fun BrowseRow(q: Question, card: CardState, open: Boolean, showSk: Boole
         onClick = onClick,
         shape = shape,
         color = if (open) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth(),
+        // TalkBack hears where every question stands, the same three states the mark draws.
+        modifier = Modifier.fillMaxWidth().semantics { stateDescription = masteryLabel(card) },
     ) {
         Column(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()).padding(horizontal = 14.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.Top) {
@@ -152,7 +155,7 @@ private fun BrowseRow(q: Question, card: CardState, open: Boolean, showSk: Boole
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                Text("${q.id}", fontFamily = Mono, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 3.dp))
+                Text("${q.id}", style = monoStyle(fontSize = 12.sp), color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 3.dp))
             }
             if (open) {
                 Spacer(Modifier.height(14.dp))
@@ -164,13 +167,19 @@ private fun BrowseRow(q: Question, card: CardState, open: Boolean, showSk: Boole
     }
 }
 
-/** New: empty ring. Learning: amber dot. Mastered: green sun with a check. */
+fun masteryLabel(card: CardState): String = when {
+    card.isMastered -> "Zvládnutá"
+    card.isNew -> "Nová"
+    else -> "Rozrobená"
+}
+
+/** New: empty ring. Learning: amber dot. Mastered: green sun with a check. The row says it to TalkBack. */
 @Composable
 private fun MasteryMark(card: CardState, modifier: Modifier = Modifier) {
     val c = Uli.colors
     when {
         card.isMastered -> Box(modifier.size(22.dp).clip(Shapes.sunny).background(c.right), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Check, "Zvládnuté", tint = c.onRight, modifier = Modifier.size(14.dp))
+            Icon(Icons.Filled.Check, null, tint = c.onRight, modifier = Modifier.size(14.dp))
         }
         card.isNew -> Box(modifier.size(22.dp).padding(2.dp).border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape))
         else -> Box(modifier.size(22.dp).padding(2.dp).clip(Shapes.cookie6).background(c.learning))

@@ -65,8 +65,8 @@ import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.Morph
 import dev.hamper.uli.engine.Code
 import dev.hamper.uli.engine.Question
-import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.Uli
+import dev.hamper.uli.ui.theme.monoStyle
 
 enum class OptState { Idle, Selected, Right, Wrong, Missed, Dim }
 
@@ -191,10 +191,7 @@ fun OptionCard(
                 if (code) {
                     Text(
                         Code.gluePaths(text),
-                        fontFamily = Mono,
-                        fontWeight = FontWeight.W500,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp,
+                        style = monoStyle(fontSize = 16.sp, fontWeight = FontWeight.W500, lineHeight = 22.sp),
                         modifier = Modifier.weight(1f),
                     )
                 } else {
@@ -208,7 +205,7 @@ fun OptionCard(
             ) {
                 CodeText(
                     note.orEmpty(),
-                    MaterialTheme.typography.bodyMedium,
+                    MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 23.sp),
                     color = content,
                     modifier = Modifier.padding(start = 64.dp, end = 18.dp, bottom = 14.dp),
                 )
@@ -360,16 +357,25 @@ fun Disputed(note: String) {
     }
 }
 
-/** The memory hook: an amber flower and one bold line, no box around it. */
+/** The memory hook: one bold line on a soft amber block, signed with the amber flower. */
 @Composable
 fun Hook(text: String) {
     val c = Uli.colors
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        ShapeBadge(UliIcons.Lightbulb, Shapes.flower, c.amber, c.onAmber, size = 30.dp, iconSize = 17.dp)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("Zapamätaj si", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            CodeText(text, MaterialTheme.typography.titleMedium.copy(lineHeight = 23.sp), color = MaterialTheme.colorScheme.onSurface)
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.primary == c.amber
+    Surface(
+        color = if (dark) scheme.primaryContainer.copy(alpha = 0.32f) else c.amber.copy(alpha = 0.20f),
+        contentColor = scheme.onSurface,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(start = 12.dp, end = 14.dp, top = 12.dp, bottom = 13.dp), verticalAlignment = Alignment.Top) {
+            ShapeBadge(UliIcons.Lightbulb, Shapes.flower, c.amber, c.onAmber, size = 30.dp, iconSize = 17.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Zapamätaj si", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                CodeText(text, MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp), color = scheme.onSurface)
+            }
         }
     }
 }
@@ -390,7 +396,7 @@ fun CorrectAnswers(q: Question, codeOptions: Set<Int>) {
                 Spacer(Modifier.width(10.dp))
                 val t = q.options[i].text
                 if (i in codeOptions) {
-                    Text(Code.gluePaths(t), fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onRightContainer)
+                    Text(Code.gluePaths(t), style = monoStyle(fontSize = 15.sp, fontWeight = FontWeight.W500), color = c.onRightContainer)
                 } else {
                     Text(Code.gluePaths(t), style = MaterialTheme.typography.bodyMedium, color = c.onRightContainer)
                 }
@@ -416,7 +422,7 @@ fun WrongAnswers(q: Question, picked: Set<Int>, codeOptions: Set<Int>) {
                 Spacer(Modifier.width(10.dp))
                 val t = q.options[i].text
                 if (i in codeOptions) {
-                    Text(Code.gluePaths(t), fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onWrongContainer)
+                    Text(Code.gluePaths(t), style = monoStyle(fontSize = 15.sp, fontWeight = FontWeight.W500), color = c.onWrongContainer)
                 } else {
                     Text(Code.gluePaths(t), style = MaterialTheme.typography.bodyMedium, color = c.onWrongContainer)
                 }

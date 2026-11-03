@@ -73,8 +73,9 @@ import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import dev.hamper.uli.engine.Code
-import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.Uli
+import dev.hamper.uli.ui.theme.monoStyle
+import dev.hamper.uli.ui.theme.monoSpan
 
 /** A shape that is [progress] of the way between two Material shapes. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -129,7 +130,7 @@ fun rememberCodeText(text: String, english: Boolean): AnnotatedString {
             for (r in spans) {
                 // Prose never breaks right after a slash either ("/bin/" + "csh").
                 if (r.first > pos) append(Code.gluePaths(text.substring(pos, r.first)))
-                withStyle(SpanStyle(fontFamily = Mono, fontSize = 0.92.em(), background = bg, fontWeight = FontWeight.W500)) {
+                withStyle(monoSpan(fontSize = 0.92.em(), background = bg, fontWeight = FontWeight.W500)) {
                     append(Code.unbreakable(text.substring(r.first, r.last + 1)))
                 }
                 pos = r.last + 1
@@ -179,7 +180,7 @@ fun Terminal(demo: String, modifier: Modifier = Modifier) {
         Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(c.terminalPrompt))
             Spacer(Modifier.width(8.dp))
-            Text("bob@uli: ~", fontFamily = Mono, fontSize = 11.sp, color = c.terminalDim)
+            Text("bob@uli: ~", style = monoStyle(fontSize = 11.sp), color = c.terminalDim)
         }
         Spacer(Modifier.height(6.dp))
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
@@ -188,10 +189,10 @@ fun Terminal(demo: String, modifier: Modifier = Modifier) {
             val fittedDp = (maxWidth.value / (TERMINAL_COLUMNS * 0.6f + 0.4f)).coerceIn(10f, 14f)
             // (toSp also undoes Android 14's non-linear scaling.)
             val style = with(LocalDensity.current) {
-                TextStyle(
-                    fontFamily = Mono,
+                monoStyle(
                     fontSize = fittedDp.dp.toSp(),
                     lineHeight = (fittedDp * 1.45f).dp.toSp(),
+                ).copy(
                     // Soft wrap fallback: a continuation starts two columns in, so it still reads as one line.
                     textIndent = TextIndent(firstLine = 0.sp, restLine = (fittedDp * 0.6f * 2).dp.toSp()),
                 )
