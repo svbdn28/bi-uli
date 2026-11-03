@@ -15,6 +15,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -138,6 +140,7 @@ fun ExamScreen(vm: AppViewModel) {
                 onToggleSk = vm::toggleSk,
                 onPick = vm::examPick,
                 onNext = vm::examNext,
+                frozen = vm.shotMode,
             )
         }
     }
@@ -145,10 +148,10 @@ fun ExamScreen(vm: AppViewModel) {
     if (confirmQuit) {
         AlertDialog(
             onDismissRequest = { confirmQuit = false },
-            title = { Text("Ukončiť skúšku?") },
-            text = { Text("Tento pokus sa nezapočíta. Na skúške sa tiež nedá vrátiť.") },
-            confirmButton = { TextButton(onClick = { confirmQuit = false; vm.home() }) { Text("Ukončiť") } },
-            dismissButton = { TextButton(onClick = { confirmQuit = false }) { Text("Pokračovať") } },
+            title = { Text("Odísť zo skúšky?") },
+            text = { Text("Pokus ostane uložený a dokončíš ho z Domova. Čas beží ďalej, ako na ostrej skúške.") },
+            confirmButton = { TextButton(onClick = { confirmQuit = false; vm.home() }) { Text("Odísť") } },
+            dismissButton = { TextButton(onClick = { confirmQuit = false }) { Text("Zostať") } },
         )
     }
 }
@@ -174,74 +177,64 @@ private fun ExamQuestion(
     onToggleSk: () -> Unit,
     onPick: (Int) -> Unit,
     onNext: () -> Unit,
+    frozen: Boolean,
 ) {
     val codeOptions = remember(q.id) { Code.codeOptions(q) }
     val multi = q.kind == Kind.Multi
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-            Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Otázka $number z $total",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val viewport = maxHeight
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                FillColumn(
+                    minHeight = viewport,
+                    gap = 14.dp,
+                    top = {
+                        QuestionCard(
+                            q = q,
+                            answered = false,
+                            showSk = showSk,
+                            onToggleSk = onToggleSk,
+                            frozen = frozen,
+                            label = {
+                                Tag("Otázka $number z $total", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                            },
+                            hint = {
+                                if (multi) {
+                                    ChooseCounter(q.choose, st.selected.size, answered = false)
+                                } else {
+                                    Text(
+                                        "Vyber a pokračuj. Výsledok uvidíš na konci.",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
+                        )
+                    },
+                    bottom = {
+                        Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            st.order.forEachIndexed { pos, i ->
+                                OptionCard(
+                                    text = q.options[i].text,
+                                    code = i in codeOptions,
+                                    letter = 'A' + pos,
+                                    state = if (i in st.selected) OptState.Selected else OptState.Idle,
+                                    multi = multi,
+                                    onClick = { onPick(i) },
+                                )
+                            }
+                        }
+                    },
                 )
-                Spacer(Modifier.weight(1f))
-                SkToggleSmall(showSk, onToggleSk)
             }
-            Spacer(Modifier.height(14.dp))
-            CodeText(q.question, QuestionStyle, english = true, color = MaterialTheme.colorScheme.onSurface)
-            AnimatedVisibility(showSk, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                CodeText(q.questionSk, MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            }
-            if (multi) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Vyber ${q.choose}: ${st.selected.size} z ${q.choose}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(18.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                st.order.forEachIndexed { pos, i ->
-                    OptionCard(
-                        text = q.options[i].text,
-                        code = i in codeOptions,
-                        letter = 'A' + pos,
-                        state = if (i in st.selected) OptState.Selected else OptState.Idle,
-                        multi = multi,
-                        onClick = { onPick(i) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(24.dp))
         }
-        Box(Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Box(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {
             BigButton(
                 text = if (number == total) "Odovzdať" else "Ďalej",
                 enabled = st.selected.size == q.choose,
                 onClick = onNext,
                 trailing = number != total,
             )
-        }
-    }
-}
-
-@Composable
-private fun SkToggleSmall(on: Boolean, onToggle: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        onClick = onToggle,
-        shape = androidx.compose.foundation.shape.CircleShape,
-        color = if (on) scheme.primary else Color.Transparent,
-        contentColor = if (on) scheme.onPrimary else scheme.onSurfaceVariant,
-        border = if (on) null else androidx.compose.foundation.BorderStroke(1.dp, scheme.outlineVariant),
-    ) {
-        Row(Modifier.height(36.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(UliIcons.Translate, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("SK", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -257,7 +250,7 @@ fun ExamEndScreen(vm: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = bottom + 120.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = bottom + 140.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
@@ -379,7 +372,6 @@ fun ReviewItem(q: Question, picked: Set<Int>?, shape: androidx.compose.ui.graphi
                     MaterialTheme.typography.titleMedium,
                     english = true,
                     modifier = Modifier.weight(1f),
-                    maxLines = if (open) Int.MAX_VALUE else 2,
                 )
                 Spacer(Modifier.width(8.dp))
                 Icon(
@@ -406,23 +398,26 @@ fun ReviewItem(q: Question, picked: Set<Int>?, shape: androidx.compose.ui.graphi
 
 @Composable
 fun BottomActions(primary: String, onPrimary: () -> Unit, secondary: String, onSecondary: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    0.3f to MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
-                    1f to MaterialTheme.colorScheme.background,
-                ),
-            )
-            .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        BigButton(primary, onClick = onPrimary, trailing = true)
-        TextButton(onClick = onSecondary, modifier = Modifier.padding(top = 2.dp)) {
-            Text(secondary, style = MaterialTheme.typography.titleSmall)
+    // A solid bar with a short fade above it: the list ends cleanly instead of showing through.
+    Column(modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(20.dp)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))),
+        )
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .navigationBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            BigButton(primary, onClick = onPrimary, trailing = true)
+            TextButton(onClick = onSecondary, modifier = Modifier.padding(top = 2.dp)) {
+                Text(secondary, style = MaterialTheme.typography.titleSmall)
+            }
         }
     }
 }

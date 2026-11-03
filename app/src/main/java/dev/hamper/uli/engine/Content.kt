@@ -38,6 +38,15 @@ data class Question(
     val disputed: Boolean get() = source != "ok"
 
     val topicEnum: Topic get() = Topic.of(topic)
+
+    /** The Slovak line adds nothing when it is the English verbatim (e.g. "Microsoft Windows:"). */
+    val hasDistinctSk: Boolean get() = questionSk.isNotBlank() && questionSk.trim() != question.trim()
+
+    /** The real-world side of a disputed question, as a sentence ("disputed: v GNU tar ..." in the source). */
+    val disputedNote: String?
+        get() = if (!disputed) null else source.removePrefix("disputed:").trim()
+            .replaceFirstChar { it.uppercase() }
+            .let { if (it.endsWith(".")) it else "$it." }
 }
 
 /** Topics in course order, with the Slovak names the UI shows. */

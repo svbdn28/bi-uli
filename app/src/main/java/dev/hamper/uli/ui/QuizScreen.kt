@@ -1,6 +1,30 @@
 package dev.hamper.uli.ui
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -64,6 +88,7 @@ import dev.hamper.uli.QuizState
 import dev.hamper.uli.engine.Code
 import dev.hamper.uli.engine.Kind
 import dev.hamper.uli.engine.Question
+import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.QuestionStyle
 import dev.hamper.uli.ui.theme.Rounded
 import dev.hamper.uli.ui.theme.Uli
@@ -107,6 +132,7 @@ fun QuizScreen(vm: AppViewModel) {
                 onPick = { i -> vm.pick(i); haptic() },
                 onSubmit = { vm.submit(); haptic() },
                 onNext = vm::next,
+                frozen = vm.shotMode,
             )
         }
     }
@@ -137,7 +163,8 @@ private fun RoundTopBar(s: QuizState, onClose: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun QuestionBody(
     q: Question,
@@ -148,135 +175,322 @@ private fun QuestionBody(
     onPick: (Int) -> Unit,
     onSubmit: () -> Unit,
     onNext: () -> Unit,
+    frozen: Boolean,
 ) {
     val answered = state.answered && isCurrent
     val selected = if (isCurrent) state.selected else emptySet()
     val codeOptions = remember(q.id) { Code.codeOptions(q) }
     val multi = q.kind == Kind.Multi
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val scroll = rememberScrollState()
+    val motion = MaterialTheme.motionScheme
+
+    // Before the answer the question card takes the spare height; after it, the feedback sheet does.
+    val cardShare by animateFloatAsState(if (answered) 0f else 1f, motion.defaultSpatialSpec(), label = "share")
+
+    // After the answer, start from the top: the question, then the right option and your pick.
+    LaunchedEffect(answered) {
+        if (answered && scroll.value > 0) scroll.animateScrollTo(0)
+    }
 
     Column(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(scroll)
-                .padding(horizontal = 18.dp),
-        ) {
-            Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Tag(q.topicEnum.title, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                if (state.round.isRetry && isCurrent) {
-                    Spacer(Modifier.width(8.dp))
-                    Tag("Oprava", Uli.colors.wrongContainer, Uli.colors.onWrongContainer)
-                }
-                Spacer(Modifier.weight(1f))
-                SkToggle(showSk, onToggleSk)
-            }
-            Spacer(Modifier.height(16.dp))
-            // Once answered, the question steps back so the answer and the why fit on screen.
-            val size by androidx.compose.animation.core.animateFloatAsState(if (answered) 19f else 23f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "qsize")
-            CodeText(
-                q.question,
-                QuestionStyle.copy(fontSize = size.sp, lineHeight = (size * 1.35f).sp),
-                english = true,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            AnimatedVisibility(showSk, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                CodeText(
-                    q.questionSk,
-                    MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val viewport = maxHeight
+            Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+                // The question card takes whatever height is left, so the options always sit at the
+                // bottom, in thumb reach. When everything does not fit, the whole screen scrolls.
+                FillColumn(
+                    minHeight = viewport,
+                    gap = 12.dp,
+                    topShare = cardShare,
+                    fillColor = if (answered) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
+                    top = {
+                        QuestionCard(
+                            q = q,
+                            answered = answered,
+                            showSk = showSk,
+                            onToggleSk = onToggleSk,
+                            frozen = frozen,
+                            label = {
+                                Tag(q.topicEnum.title, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                                if (state.round.isRetry && isCurrent) {
+                                    Tag("Oprava", Uli.colors.wrongContainer, Uli.colors.onWrongContainer)
+                                }
+                            },
+                            hint = {
+                                when {
+                                    multi -> ChooseCounter(q.choose, selected.size, answered)
+                                    q.kind == Kind.TrueFalse -> Hint("Pravda, alebo nepravda? Ťukni.")
+                                    else -> Hint("Ťukni na odpoveď")
+                                }
+                            },
+                        )
+                    },
+                    bottom = {
+                        Column {
+                            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                state.order.forEachIndexed { pos, i ->
+                                    val opt = q.options[i]
+                                    val st = when {
+                                        !answered -> if (i in selected) OptState.Selected else OptState.Idle
+                                        opt.correct && i in selected -> OptState.Right
+                                        opt.correct && !multi -> OptState.Right
+                                        opt.correct -> OptState.Missed
+                                        i in selected -> OptState.Wrong
+                                        else -> OptState.Dim
+                                    }
+                                    // Once answered only what matters stays: the right one(s) and your pick,
+                                    // so the why fits under them without scrolling.
+                                    AnimatedVisibility(
+                                        visible = st != OptState.Dim,
+                                        enter = fadeIn(),
+                                        exit = shrinkVertically(motion.defaultSpatialSpec()) + fadeOut(motion.fastEffectsSpec()),
+                                    ) {
+                                        Entrance(pos, enabled = isCurrent && !answered && !frozen) {
+                                            OptionCard(
+                                                text = opt.text,
+                                                code = i in codeOptions,
+                                                letter = 'A' + pos,
+                                                state = st,
+                                                multi = multi,
+                                                onClick = if (answered || !isCurrent) null else ({ onPick(i) }),
+                                                note = opt.note,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = answered,
+                                enter = expandVertically(motion.defaultSpatialSpec()) + fadeIn(motion.defaultEffectsSpec()),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                FeedbackPanel(q = q, correct = state.correct, streak = state.round.streak, modifier = Modifier.padding(top = 12.dp))
+                            }
+                            if (!answered) {
+                                Spacer(Modifier.height(if (multi) 8.dp else 12.dp))
+                                if (!multi) Spacer(Modifier.navigationBarsPadding())
+                            }
+                        }
+                    },
                 )
             }
-            if (multi) {
-                Spacer(Modifier.height(12.dp))
-                ChooseCounter(q.choose, selected.size, answered)
-            }
-            Spacer(Modifier.height(18.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                state.order.forEachIndexed { pos, i ->
-                    val opt = q.options[i]
-                    val st = when {
-                        !answered -> if (i in selected) OptState.Selected else OptState.Idle
-                        opt.correct && i in selected -> OptState.Right
-                        opt.correct && !multi -> OptState.Right
-                        opt.correct -> OptState.Missed
-                        i in selected -> OptState.Wrong
-                        else -> OptState.Dim
-                    }
-                    // After a miss only what matters stays: the right one(s) and your pick.
-                    // After a hit the other options stay, dimmed, as context.
-                    AnimatedVisibility(
-                        visible = st != OptState.Dim || state.correct,
-                        enter = fadeIn(),
-                        exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
-                    ) {
-                        OptionCard(
-                            text = opt.text,
-                            code = i in codeOptions,
-                            letter = 'A' + pos,
-                            state = st,
-                            multi = multi,
-                            onClick = if (answered || !isCurrent) null else ({ onPick(i) }),
-                            note = opt.note,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(24.dp))
         }
 
-        // Bottom: either the check button (multi) or the feedback panel.
+        // Pinned bottom: the check button (multi) or, once answered, "Ďalej" on the panel's color.
         AnimatedVisibility(
             visible = answered,
-            enter = slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it } + fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+            enter = slideInVertically(motion.defaultSpatialSpec()) { it } + fadeIn(motion.fastEffectsSpec()),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
-            FeedbackPanel(
-                q = q,
-                correct = state.correct,
-                wrongNotes = emptyList(),
-                last = state.round.index + 1 >= state.round.queue.size,
-                maxHeight = screenHeight * 0.6f,
-                onNext = onNext,
-            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp),
+            ) {
+                val last = state.round.index + 1 >= state.round.queue.size
+                BigButton(if (last) "Dokončiť kolo" else "Ďalej", onClick = onNext, trailing = true)
+            }
         }
         if (multi && !answered) {
-            Box(Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp)) {
+            Box(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {
                 BigButton(
                     text = "Skontrolovať",
                     enabled = selected.size == q.choose,
                     onClick = onSubmit,
                 )
             }
-        } else if (!answered) {
-            Spacer(Modifier.navigationBarsPadding())
+        }
+    }
+}
+
+/**
+ * A column at least [minHeight] tall. The leftover space goes to [top] while [topShare] is 1 (the question
+ * card grows, so [bottom] hugs the lower edge, in thumb reach) and to a strip of [fillColor] under
+ * [bottom] while it is 0 (the feedback sheet runs down to the pinned button). Taller content just scrolls.
+ */
+@Composable
+fun FillColumn(
+    minHeight: Dp,
+    gap: Dp,
+    top: @Composable () -> Unit,
+    bottom: @Composable () -> Unit,
+    topShare: Float = 1f,
+    fillColor: Color = Color.Transparent,
+) {
+    Layout(
+        content = {
+            Box(propagateMinConstraints = true) { top() }
+            Box { bottom() }
+            Box(Modifier.background(fillColor))
+        },
+    ) { m, c ->
+        val w = c.maxWidth
+        val b = m[1].measure(Constraints(minWidth = w, maxWidth = w))
+        val g = gap.roundToPx()
+        val natural = m[0].minIntrinsicHeight(w)
+        val spare = (minHeight.roundToPx() - b.height - g - natural).coerceAtLeast(0)
+        val t = m[0].measure(Constraints(minWidth = w, maxWidth = w, minHeight = natural + (spare * topShare).toInt()))
+        val rest = (minHeight.roundToPx() - t.height - g - b.height).coerceAtLeast(0)
+        val f = m[2].measure(Constraints.fixed(w, rest))
+        layout(w, t.height + g + b.height + rest) {
+            t.place(0, 0)
+            b.place(0, t.height + g)
+            f.place(0, t.height + g + b.height)
+        }
+    }
+}
+
+/** Options rise in one after another when a question arrives. */
+@Composable
+private fun Entrance(index: Int, enabled: Boolean, content: @Composable () -> Unit) {
+    val p = remember { Animatable(if (enabled) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (p.value < 1f) {
+            delay(70L + 55L * index)
+            p.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 380f))
+        }
+    }
+    Box(
+        Modifier.graphicsLayer {
+            alpha = p.value.coerceIn(0f, 1f)
+            translationY = (1f - p.value) * 28.dp.toPx()
+        },
+    ) { content() }
+}
+
+/**
+ * The question on a warm card that fills the space above the options, signed with the app's mark:
+ * an amber cookie with a blinking terminal cursor that turns slowly. Alive, but nothing extra to read.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun QuestionCard(
+    q: Question,
+    answered: Boolean,
+    showSk: Boolean,
+    onToggleSk: () -> Unit,
+    frozen: Boolean,
+    label: @Composable () -> Unit,
+    hint: @Composable () -> Unit,
+) {
+    val c = Uli.colors
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.primary == c.amber
+    val card = if (dark) scheme.primaryContainer.copy(alpha = 0.30f) else c.amber.copy(alpha = 0.17f)
+    val qSize by animateFloatAsState(if (answered) 19f else 23f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "qsize")
+    Surface(
+        color = card,
+        shape = RoundedCornerShape(32.dp),
+        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
+    ) {
+        Column(
+            Modifier.padding(start = 20.dp, end = 14.dp, top = if (answered) 16.dp else 14.dp, bottom = if (answered) 16.dp else 18.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column {
+                // Once answered the card steps back to just the question.
+                AnimatedVisibility(!answered, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Row(Modifier.padding(bottom = 16.dp), verticalAlignment = Alignment.Top) {
+                        FlowRow(
+                            Modifier.weight(1f).padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) { label() }
+                        Spacer(Modifier.width(8.dp))
+                        SkToggle(showSk, onToggleSk)
+                    }
+                }
+                CodeText(
+                    q.question,
+                    QuestionStyle.copy(fontSize = qSize.sp, lineHeight = (qSize * 1.35f).sp),
+                    english = true,
+                    color = scheme.onSurface,
+                    modifier = Modifier.padding(end = 6.dp),
+                )
+                AnimatedVisibility(showSk && q.hasDistinctSk, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    CodeText(
+                        q.questionSk,
+                        MaterialTheme.typography.bodyLarge,
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp, end = 6.dp),
+                    )
+                }
+            }
+            AnimatedVisibility(!answered, enter = fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                Row(Modifier.padding(top = 18.dp), verticalAlignment = Alignment.Bottom) {
+                    Box(Modifier.weight(1f).padding(bottom = 4.dp)) { hint() }
+                    PromptMark(frozen)
+                }
+            }
+        }
+    }
+}
+
+/** The app's mark: ">_" on an amber cookie. The cookie turns slowly and the cursor blinks. */
+@Composable
+private fun PromptMark(frozen: Boolean, size: Dp = 68.dp) {
+    val c = Uli.colors
+    val t = rememberInfiniteTransition(label = "mark")
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(24_000, easing = LinearEasing)), label = "spin")
+    val blink by t.animateFloat(
+        1f, 0f,
+        infiniteRepeatable(keyframes { durationMillis = 1060; 1f at 0; 1f at 529; 0f at 530; 0f at 1059 }),
+        label = "blink",
+    )
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { rotationZ = if (frozen) 12f else spin }
+                .clip(Shapes.cookie12)
+                .background(c.amber),
+        )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(">", fontFamily = Mono, fontWeight = FontWeight.W700, fontSize = 22.sp, color = c.onAmber)
+            Text(
+                "_",
+                fontFamily = Mono,
+                fontWeight = FontWeight.W700,
+                fontSize = 22.sp,
+                color = c.onAmber,
+                modifier = Modifier.graphicsLayer { alpha = if (frozen) 1f else blink },
+            )
         }
     }
 }
 
 @Composable
-private fun SkToggle(on: Boolean, onToggle: () -> Unit) {
+private fun Hint(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(UliIcons.Touch, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+fun SkToggle(on: Boolean, onToggle: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(
         onClick = onToggle,
         shape = CircleShape,
-        color = if (on) scheme.primary else Color.Transparent,
+        color = if (on) scheme.primary else scheme.surface.copy(alpha = 0.6f),
         contentColor = if (on) scheme.onPrimary else scheme.onSurfaceVariant,
         border = if (on) null else androidx.compose.foundation.BorderStroke(1.dp, scheme.outlineVariant),
     ) {
-        Row(Modifier.heightIn(min = 36.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.heightIn(min = 40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(UliIcons.Translate, null, Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("SK", style = MaterialTheme.typography.labelLarge)
+            // Never "S / K": the chip keeps its width and the topic tags wrap instead.
+            Text("SK", style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
         }
     }
 }
 
 @Composable
-private fun ChooseCounter(choose: Int, picked: Int, answered: Boolean) {
+fun ChooseCounter(choose: Int, picked: Int, answered: Boolean) {
     val scheme = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -290,7 +504,7 @@ private fun ChooseCounter(choose: Int, picked: Int, answered: Boolean) {
             Box(
                 Modifier
                     .padding(end = 5.dp)
-                    .size(if (filled) 14.dp else 12.dp)
+                    .size(if (filled) 16.dp else 12.dp)
                     .clip(if (filled) Shapes.cookie6 else CircleShape)
                     .background(if (filled) scheme.primary else scheme.surfaceContainerHighest),
             )
@@ -321,24 +535,18 @@ fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit, modifi
     }
 }
 
+/** The why, as a sheet that scrolls with the question: verdict, explanation, hook, terminal. */
 @Composable
-private fun FeedbackPanel(
-    q: Question,
-    correct: Boolean,
-    wrongNotes: List<String>,
-    last: Boolean,
-    maxHeight: androidx.compose.ui.unit.Dp,
-    onNext: () -> Unit,
-) {
+private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, modifier: Modifier = Modifier) {
     val c = Uli.colors
     val accent = if (correct) c.right else c.wrong
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.heightIn(max = maxHeight).navigationBarsPadding()) {
-            Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 ShapeBadge(
                     if (correct) Icons.Filled.Check else Icons.Filled.Close,
                     if (correct) Shapes.verySunny else Shapes.puffy,
@@ -352,19 +560,14 @@ private fun FeedbackPanel(
                     if (correct) "Správne" else "Nesprávne",
                     style = MaterialTheme.typography.headlineSmall,
                     color = accent,
+                    modifier = Modifier.weight(1f),
                 )
+                if (correct && streak >= 3) {
+                    Tag("$streak za sebou", c.amber, c.onAmber)
+                }
             }
-            Column(
-                Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-            ) {
-                Explanation(q, wrongNotes)
-            }
-            Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp)) {
-                BigButton(if (last) "Dokončiť kolo" else "Ďalej", onClick = onNext, trailing = true)
-            }
+            Spacer(Modifier.height(10.dp))
+            Explanation(q, emptyList())
         }
     }
 }

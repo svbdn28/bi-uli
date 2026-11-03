@@ -81,6 +81,8 @@ fun RoundEndScreen(vm: AppViewModel) {
                     Spacer(Modifier.height(4.dp))
                     Text(
                         when {
+                            s.mistakes.isEmpty() && s.kind == RoundKind.Mistakes ->
+                                "Všetko na prvý pokus. Z Chýb zmiznú, keď ich trafíš aj neskôr: o 10 minút a potom o 4 hodiny."
                             s.mistakes.isEmpty() -> "Všetko na prvý pokus."
                             s.kind == RoundKind.Mistakes -> "Opravené. Tieto otázky sa ti vrátia o 10 minút."
                             else -> "Chyby si hneď opravil. Vrátia sa ti o 10 minút, kým sa neusadia."

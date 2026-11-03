@@ -77,12 +77,18 @@ fun HomeScreen(vm: AppViewModel) {
     val readiness = Srs.readiness(ids, progress)
     val mastered = Srs.masteredCount(ids, progress)
     val learning = ids.count { progress.card(it).let { c -> !c.isNew && !c.isMastered } }
-    val mistakes = Srs.mistakes(ids, progress, size = ids.size).size
-    val preview = vm.nextRoundPreview()
     val now = vm.clock()
+    val allMistakes = Srs.allMistakes(ids, progress, now)
+    val drill = vm.mistakeIds().size
+    val mistakesDue = allMistakes.count { Srs.isDue(progress.card(it), now) }
+    val nextMistakeIn = allMistakes.minOfOrNull { progress.card(it).dueAt }?.let { it - now }
+    val preview = vm.nextRoundPreview()
+    val openRound = vm.quiz
+    val openExam = vm.exam
     val dueInRound = preview.count { Srs.isDue(progress.card(it), now) }
     val newInRound = preview.count { progress.card(it).isNew }
     var confirmReset by remember { mutableStateOf(false) }
+    var confirmDiscardExam by remember { mutableStateOf(false) }
 
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -90,37 +96,49 @@ fun HomeScreen(vm: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = bottom + 132.dp),
+            // The bottom padding reserves the whole action bar, so the last topic ends above it.
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 8.dp, bottom = bottom + 128.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { Header(onReset = { confirmReset = true }) }
+            if (openExam != null) {
+                item {
+                    OpenExamCard(
+                        number = openExam.exam.index + 1,
+                        total = openExam.exam.ids.size,
+                        onResume = vm::resumeExam,
+                        onDiscard = { confirmDiscardExam = true },
+                    )
+                }
+            }
             item { ReadinessCard(readiness, mastered, learning, ids.size) }
             item {
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ActionTile(
                         title = "Skúška nanečisto",
-                        subtitle = "50 otázok",
+                        subtitle = if (openExam != null) "Rozpísaná, ${openExam.exam.index + 1}/${openExam.exam.ids.size}" else "50 otázok",
                         icon = UliIcons.Timer,
                         shape = Shapes.clover4,
                         container = MaterialTheme.colorScheme.tertiaryContainer,
                         content = MaterialTheme.colorScheme.onTertiaryContainer,
-                        onClick = vm::startExam,
+                        onClick = if (openExam != null) vm::resumeExam else vm::startExam,
                         modifier = Modifier.weight(1f),
                     )
                     ActionTile(
                         title = "Chyby",
-                        subtitle = if (mistakes == 0) "Zatiaľ žiadne" else "$mistakes ${questionsWord(mistakes)}",
+                        subtitle = if (drill == 0) "Zatiaľ žiadne" else "$drill ${questionsWord(drill)}",
+                        note = mistakesNote(allMistakes.size, drill, mistakesDue, nextMistakeIn),
                         icon = UliIcons.Replay,
                         shape = Shapes.softBurst,
                         container = Uli.colors.wrongContainer,
                         content = Uli.colors.onWrongContainer,
                         onClick = vm::startMistakes,
-                        enabled = mistakes > 0,
+                        enabled = drill > 0,
                         modifier = Modifier.weight(1f),
                     )
                     ActionTile(
                         title = "Všetky otázky",
-                        subtitle = "${ids.size} na čítanie",
+                        subtitle = "${ids.size} otázok",
                         icon = UliIcons.Stack,
                         shape = Shapes.cookie6,
                         container = MaterialTheme.colorScheme.secondaryContainer,
@@ -150,26 +168,51 @@ fun HomeScreen(vm: AppViewModel) {
             }
         }
 
-        // The one big action lives in the thumb zone.
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.35f to MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
-                        1f to MaterialTheme.colorScheme.background,
-                    ),
-                )
-                .navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 12.dp),
-        ) {
-            ContinueButton(
-                subtitle = roundSubtitle(dueInRound, newInRound, preview.size),
-                onClick = vm::startRound,
+        // The one big action lives in the thumb zone, on a solid bar: the list ends behind a short fade
+        // above it instead of ghosting through.
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(20.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background))),
             )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 12.dp),
+            ) {
+                ContinueButton(
+                    title = when {
+                        openRound != null -> "Pokračovať"
+                        vm.isFresh -> "Začať"
+                        else -> "Pokračovať"
+                    },
+                    subtitle = when {
+                        openRound != null -> "Rozrobené kolo, otázka ${openRound.round.displayNumber} z ${openRound.round.total}"
+                        vm.isFresh -> "Prvých ${preview.size} otázok, od úvodu do Linuxu"
+                        else -> roundSubtitle(dueInRound, newInRound, preview.size)
+                    },
+                    onClick = vm::continueOrStart,
+                )
+            }
         }
+    }
+
+    if (confirmDiscardExam) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscardExam = false },
+            title = { Text("Zahodiť rozpísanú skúšku?") },
+            text = { Text("Odpovede z tohto pokusu sa nezapočítajú. Postup v otázkach ostane.") },
+            confirmButton = {
+                TextButton(onClick = { vm.discardExam(); confirmDiscardExam = false }) {
+                    Text("Zahodiť", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDiscardExam = false }) { Text("Nechať") } },
+        )
     }
 
     if (confirmReset) {
@@ -184,6 +227,25 @@ fun HomeScreen(vm: AppViewModel) {
             },
             dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Zrušiť") } },
         )
+    }
+}
+
+/** Why the Chyby count is what it is: how many are up now, or when the next one comes back. */
+private fun mistakesNote(total: Int, drill: Int, due: Int, nextIn: Long?): String? = when {
+    total == 0 -> null
+    total > drill -> "+${total - drill} v ďalšom kole"
+    due in 1 until total -> "$due na rade teraz"
+    due == 0 && nextIn != null -> "na rade ${formatIn(nextIn)}"
+    else -> null
+}
+
+/** "o 9 min", "o 3 h", "o 2 dni" for a time from now. */
+fun formatIn(ms: Long): String {
+    val min = ((ms + 59_999) / 60_000).coerceAtLeast(1)
+    return when {
+        min < 60 -> "o $min min"
+        min < 24 * 60 -> "o ${(min + 59) / 60} h"
+        else -> ((min + 24 * 60 - 1) / (24 * 60)).let { d -> if (d == 1L) "zajtra" else "o $d ${if (d in 2..4) "dni" else "dní"}" }
     }
 }
 
@@ -281,23 +343,12 @@ private fun ReadinessCard(readiness: Double, mastered: Int, learning: Int, total
             }
             Spacer(Modifier.height(20.dp))
             ExamMeter(readiness.toFloat())
-            Spacer(Modifier.height(22.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("Zvládnuté", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(
-                    "$mastered",
-                    fontFamily = Rounded,
-                    fontWeight = FontWeight.W800,
-                    fontSize = 28.sp,
-                    lineHeight = 28.sp,
-                )
-                Text(
-                    " / $total",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Spacer(Modifier.height(20.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Zvládnuté", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text("$mastered z $total", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             MasteryBar(mastered, learning, total)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -379,6 +430,7 @@ private fun ActionTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    note: String? = null,
 ) {
     Surface(
         onClick = onClick,
@@ -390,9 +442,12 @@ private fun ActionTile(
         Column(Modifier.padding(14.dp).alpha(if (enabled) 1f else 0.5f)) {
             ShapeBadge(icon, shape, container, content, size = 44.dp, iconSize = 22.dp)
             Spacer(Modifier.height(14.dp))
-            Text(title, style = MaterialTheme.typography.titleSmall, lineHeight = 18.sp)
+            Text(title, style = MaterialTheme.typography.titleMedium, lineHeight = 20.sp)
             Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(subtitle, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (note != null) {
+                Text(note, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
+            }
         }
     }
 }
@@ -424,7 +479,7 @@ private fun TopicRow(title: String, mastered: Int, learning: Int, total: Int, sh
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ContinueButton(subtitle: String, onClick: () -> Unit) {
+private fun ContinueButton(title: String, subtitle: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         shapes = ButtonShapes(RoundedCornerShape(36.dp), RoundedCornerShape(18.dp)),
@@ -433,7 +488,7 @@ private fun ContinueButton(subtitle: String, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().height(84.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Pokračovať", fontFamily = Rounded, fontWeight = FontWeight.W800, fontSize = 24.sp, lineHeight = 28.sp)
+            Text(title, fontFamily = Rounded, fontWeight = FontWeight.W800, fontSize = 24.sp, lineHeight = 28.sp)
             Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f))
         }
         Box(
@@ -441,6 +496,33 @@ private fun ContinueButton(subtitle: String, onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(26.dp))
+        }
+    }
+}
+
+/** A mock exam left half-way: continue it (the obvious action) or throw it away. */
+@Composable
+private fun OpenExamCard(number: Int, total: Int, onResume: () -> Unit, onDiscard: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(color = scheme.tertiaryContainer, contentColor = scheme.onTertiaryContainer, shape = MaterialTheme.shapes.extraLarge) {
+        Column(Modifier.padding(start = 18.dp, end = 8.dp, top = 12.dp, bottom = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShapeBadge(UliIcons.Timer, Shapes.clover4, scheme.tertiary, scheme.onTertiary, size = 40.dp, iconSize = 20.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Rozpísaná skúška nanečisto", style = MaterialTheme.typography.titleMedium)
+                    Text("Si na otázke $number z $total", style = MaterialTheme.typography.bodyMedium, color = scheme.onTertiaryContainer.copy(alpha = 0.8f))
+                }
+                TextButton(onClick = onDiscard) { Text("Zahodiť", color = scheme.onTertiaryContainer) }
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = onResume,
+                colors = ButtonDefaults.buttonColors(containerColor = scheme.tertiary, contentColor = scheme.onTertiary),
+                modifier = Modifier.fillMaxWidth().padding(end = 10.dp).height(52.dp),
+            ) {
+                Text("Pokračovať v skúške", fontFamily = Rounded, fontWeight = FontWeight.W700, fontSize = 17.sp)
+            }
         }
     }
 }

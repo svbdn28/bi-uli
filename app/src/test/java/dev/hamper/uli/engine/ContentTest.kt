@@ -60,4 +60,26 @@ class ContentTest {
         assertEquals(listOf("-S", "-r", "ls -Sr"), marked("-S triedi podľa veľkosti. Opačné poradie dostaneš pridaním -r (ls -Sr).", false))
         assertFalse(marked("Free as in freedom, not free beer.", false).isNotEmpty())
     }
+
+    @Test
+    fun codeSpansDoNotBreakInsidePathsButLongCodeWrapsAtSpaces() {
+        val wj = '\u2060'
+        assertEquals("/${wj}usr/${wj}bin/${wj}program", Code.unbreakable("/usr/bin/program"))
+        assertEquals("ls\u00A0-${wj}l", Code.unbreakable("ls -l"))
+        val long = Code.unbreakable("sudo chmod 4755 /usr/bin/program")
+        assertTrue(long.contains(' '))
+        assertEquals("16384 Nov 3 /${wj}usr/${wj}bin", Code.gluePaths("16384 Nov 3 /usr/bin"))
+    }
+
+    @Test
+    fun skLineHiddenWhenItEqualsTheQuestionAndDisputedNoteIsASentence() {
+        val q6 = questions.first { it.id == 6 }
+        assertFalse(q6.hasDistinctSk)
+        assertTrue(questions.first { it.id == 67 }.hasDistinctSk)
+        assertEquals(
+            "V GNU tar funguje aj tar -tf foo.tar.gz (autodetekcia kompresie), kľúč NDG chce -tzf.",
+            questions.first { it.id == 33 }.disputedNote,
+        )
+        assertEquals(null, questions.first { it.id == 67 }.disputedNote)
+    }
 }

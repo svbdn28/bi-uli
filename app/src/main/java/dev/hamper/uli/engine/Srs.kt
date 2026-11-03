@@ -52,15 +52,23 @@ object Srs {
         else -> 0.97
     }
 
-    fun answer(state: CardState, correct: Boolean, now: Long): CardState {
-        val box = if (correct) (state.box + 1).coerceAtMost(MAX_BOX) else 1
-        return state.copy(
-            box = box,
+    /**
+     * One answer in any mode (round, Chyby, mock exam). A wrong answer always drops the card to box 1.
+     * A right answer climbs a box only when the card is new or due; answering a card again before its
+     * interval is up proves nothing about memory, so it only marks the card as seen.
+     */
+    fun answer(state: CardState, correct: Boolean, now: Long): CardState = when {
+        !correct -> state.copy(
+            box = 1,
             lastSeenAt = now,
-            dueAt = now + interval(box),
-            timesWrong = state.timesWrong + if (correct) 0 else 1,
-            timesRight = state.timesRight + if (correct) 1 else 0,
+            dueAt = now + interval(1),
+            timesWrong = state.timesWrong + 1,
         )
+        state.isNew || state.dueAt <= now -> {
+            val box = (state.box + 1).coerceAtMost(MAX_BOX)
+            state.copy(box = box, lastSeenAt = now, dueAt = now + interval(box), timesRight = state.timesRight + 1)
+        }
+        else -> state.copy(lastSeenAt = now)
     }
 
     /** Expected share of correct answers on the exam (questions are drawn uniformly from the pool). */
@@ -92,12 +100,20 @@ object Srs {
         return picked.toList()
     }
 
-    /** Cards you got wrong and have not climbed back from yet, worst first. */
-    fun mistakes(contentOrder: List<Int>, progress: ProgressData, size: Int = ROUND_SIZE): List<Int> =
+    /** A "Chyby" card: answered wrong at least once and not yet back at [MASTERED_BOX]. */
+    fun isMistake(state: CardState): Boolean = state.timesWrong > 0 && state.box < MASTERED_BOX
+
+    /** Every Chyby card, due ones first (lowest box first), then the rest by how soon they come due. */
+    fun allMistakes(contentOrder: List<Int>, progress: ProgressData, now: Long): List<Int> =
         contentOrder
-            .filter { progress.card(it).let { c -> c.timesWrong > 0 && c.box in 1 until MASTERED_BOX } }
-            .sortedWith(compareBy({ progress.card(it).box }, { -progress.card(it).timesWrong }, { progress.card(it).lastSeenAt }))
-            .take(size)
+            .filter { isMistake(progress.card(it)) }
+            .sortedWith(
+                compareBy<Int>({ !isDue(progress.card(it), now) }, { progress.card(it).box }, { progress.card(it).dueAt }, { -progress.card(it).timesWrong }),
+            )
+
+    /** What a Chyby round drills: the first [size] of [allMistakes]. */
+    fun mistakes(contentOrder: List<Int>, progress: ProgressData, now: Long, size: Int = ROUND_SIZE): List<Int> =
+        allMistakes(contentOrder, progress, now).take(size)
 
     fun dueCount(ids: Collection<Int>, progress: ProgressData, now: Long): Int = ids.count { isDue(progress.card(it), now) }
 }

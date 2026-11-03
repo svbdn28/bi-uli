@@ -85,4 +85,16 @@ class SessionsTest {
         assertFalse(ExamResult(39, 50, emptyList()).passed)
         assertEquals(67.2, ExamResult(42, 50, emptyList()).points, 1e-9)
     }
+
+    @Test
+    fun streakCountsRightFirstAttemptsBackFromTheLatest() {
+        var r = Round(ids = (1..6).toList())
+        r = r.answer(true).next().answer(false).next()
+        assertEquals(0, r.streak)
+        // 3, 4, then the retry of 2 (does not count either way), then 5.
+        r = r.answer(true).next().answer(true).next().answer(true).next()
+        assertEquals(2, r.streak)
+        r = r.answer(true).next()
+        assertEquals(3, r.streak)
+    }
 }

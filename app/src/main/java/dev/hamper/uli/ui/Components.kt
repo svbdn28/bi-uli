@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -46,6 +44,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
@@ -111,7 +110,7 @@ fun rememberCodeText(text: String, english: Boolean): AnnotatedString {
             for (r in spans) {
                 if (r.first > pos) append(text.substring(pos, r.first))
                 withStyle(SpanStyle(fontFamily = Mono, fontSize = 0.92.em(), background = bg, fontWeight = FontWeight.W500)) {
-                    append(text.substring(r.first, r.last + 1).replace(' ', '\u00A0'))
+                    append(Code.unbreakable(text.substring(r.first, r.last + 1)))
                 }
                 pos = r.last + 1
             }
@@ -150,31 +149,40 @@ fun Terminal(demo: String, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(c.terminal)
-            .padding(top = 10.dp, bottom = 14.dp),
+            .padding(top = 9.dp, bottom = 12.dp),
     ) {
         Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(c.terminalPrompt))
             Spacer(Modifier.width(8.dp))
             Text("bob@uli: ~", fontFamily = Mono, fontSize = 11.sp, color = c.terminalDim)
         }
-        Spacer(Modifier.height(8.dp))
-        Column(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+        Spacer(Modifier.height(6.dp))
+        // Soft wrap with a hanging indent: a continuation starts two columns in, so nothing is cut
+        // and it still reads as one line.
+        val hang = TextIndent(firstLine = 0.sp, restLine = (TERMINAL_SP * 0.6f * 2).sp)
+        Column(Modifier.padding(horizontal = 14.dp)) {
             for (line in demo.lines()) {
                 val text = buildAnnotatedString {
                     if (line.startsWith("$ ")) {
                         withStyle(SpanStyle(color = c.terminalPrompt, fontWeight = FontWeight.W700)) { append("$ ") }
-                        withStyle(SpanStyle(color = c.terminalText, fontWeight = FontWeight.W500)) { append(line.removePrefix("$ ")) }
+                        withStyle(SpanStyle(color = c.terminalText, fontWeight = FontWeight.W500)) { append(Code.gluePaths(line.removePrefix("$ "))) }
                     } else if (line == "$") {
                         withStyle(SpanStyle(color = c.terminalPrompt, fontWeight = FontWeight.W700)) { append("$") }
                     } else {
-                        withStyle(SpanStyle(color = c.terminalDim)) { append(line.replace("\t", "    ")) }
+                        withStyle(SpanStyle(color = c.terminalDim)) { append(Code.gluePaths(line.replace("\t", "    "))) }
                     }
                 }
-                Text(text, fontFamily = Mono, fontSize = 13.sp, lineHeight = 20.sp, softWrap = false)
+                Text(
+                    text,
+                    style = TextStyle(fontFamily = Mono, fontSize = TERMINAL_SP.sp, lineHeight = 18.sp, textIndent = hang),
+                    softWrap = true,
+                )
             }
         }
     }
 }
+
+private const val TERMINAL_SP = 12.5f
 
 /** A badge: an icon inside a Material shape. */
 @Composable

@@ -7,8 +7,11 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hamper.uli.data.FileProgressStore
+import dev.hamper.uli.data.FileSessionStore
+import dev.hamper.uli.data.MemorySessionStore
+import dev.hamper.uli.data.SavedSession
+import dev.hamper.uli.data.SessionStore
 import dev.hamper.uli.data.ProgressStore
-import dev.hamper.uli.engine.CardState
 import dev.hamper.uli.engine.Content
 import dev.hamper.uli.engine.Exam
 import dev.hamper.uli.engine.ExamResult
@@ -23,6 +26,7 @@ import dev.hamper.uli.engine.result
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
 sealed interface Screen {
@@ -34,8 +38,10 @@ sealed interface Screen {
     data class Browse(val topic: Topic? = null, val expanded: Int? = null) : Screen
 }
 
+@Serializable
 enum class RoundKind { Smart, Mistakes }
 
+@Serializable
 data class QuizState(
     val kind: RoundKind,
     val round: Round,
@@ -46,6 +52,7 @@ data class QuizState(
     val correct: Boolean = false,
 )
 
+@Serializable
 data class ExamState(
     val exam: Exam,
     val order: List<Int>,
@@ -71,6 +78,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val ids: List<Int> = questions.map { it.id }
 
     private var store: ProgressStore = FileProgressStore(app.filesDir)
+    private var sessionStore: SessionStore = FileSessionStore(app.filesDir)
     private val io = Dispatchers.IO.limitedParallelism(1)
     private var random: Random = Random.Default
     private var seededShuffle = false
@@ -94,8 +102,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var shotMode by mutableStateOf(false)
         private set
 
-    /** Cards at the start of the round, to count what got newly mastered. */
-    private var roundStart: Map<Int, CardState> = emptyMap()
+    /** Boxes at the start of the round, to count what got newly mastered. */
+    private var roundStart: Map<Int, Int> = emptyMap()
+
+    init {
+        // An open round or exam survives a killed process; Domov offers to continue it.
+        val saved = sessionStore.load()
+        fun known(list: List<Int>) = list.isNotEmpty() && list.all { it in byId }
+        quiz = saved.quiz?.takeIf { known(it.round.queue) && !it.round.isFinished }
+        roundStart = if (quiz != null) saved.roundStartBoxes else emptyMap()
+        exam = saved.exam?.takeIf { known(it.exam.ids) && !it.exam.isFinished }
+    }
+
+    private fun saveSession() {
+        if (shotMode) return
+        val data = SavedSession(quiz = quiz, roundStartBoxes = roundStart, exam = exam)
+        val s = sessionStore
+        viewModelScope.launch(io) { s.save(data) }
+    }
 
     private fun persist(data: ProgressData) {
         progress = data
@@ -110,17 +134,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // Home
 
-    fun mistakeIds(): List<Int> = Srs.mistakes(ids, progress)
+    /** What a Chyby round drills right now (up to a round's worth). */
+    fun mistakeIds(): List<Int> = Srs.mistakes(ids, progress, clock())
+
+    /** Nothing answered yet and nothing open: the main button says "Začať". */
+    val isFresh: Boolean get() = progress.cards.isEmpty() && quiz == null
 
     fun nextRoundPreview(): List<Int> = Srs.buildRound(ids, progress, clock())
 
     fun toggleSk() = persist(progress.copy(showSk = !progress.showSk))
 
-    fun resetProgress() = persist(ProgressData(showSk = progress.showSk))
+    fun resetProgress() {
+        persist(ProgressData(showSk = progress.showSk))
+        quiz = null
+        exam = null
+        roundStart = emptyMap()
+        saveSession()
+    }
 
     // Learning rounds
 
     fun startRound() = startRound(RoundKind.Smart, Srs.buildRound(ids, progress, clock()))
+
+    /** Domov's main button: back into the open round, or a fresh smart round. */
+    fun continueOrStart() {
+        if (quiz != null) screen = Screen.Quiz else startRound()
+    }
 
     fun startMistakes() {
         val m = mistakeIds()
@@ -128,9 +167,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun startRound(kind: RoundKind, roundIds: List<Int>) {
-        roundStart = progress.cards
+        roundStart = roundIds.associateWith { progress.card(it).box }
         val round = Round(roundIds)
         quiz = QuizState(kind = kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)))
+        saveSession()
         screen = Screen.Quiz
     }
 
@@ -144,6 +184,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (q.kind == Kind.Multi) {
             val sel = if (index in s.selected) s.selected - index else if (s.selected.size < q.choose) s.selected + index else s.selected
             quiz = s.copy(selected = sel)
+            saveSession()
         } else {
             quiz = s.copy(selected = setOf(index))
             submit()
@@ -163,6 +204,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Only the first attempt in a round moves the box; corrections just mark the card as seen.
         val updated = if (firstAttempt) Srs.answer(card, ok, now) else card.copy(lastSeenAt = now)
         persist(progress.copy(cards = progress.cards + (q.id to updated)))
+        saveSession()
     }
 
     fun next() {
@@ -170,13 +212,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!s.answered) return
         val round = s.round.next()
         if (round.isFinished) {
-            val mastered = round.ids.count { (roundStart[it]?.box ?: 0) < Srs.MASTERED_BOX && progress.card(it).isMastered }
+            val mastered = round.ids.count { (roundStart[it] ?: 0) < Srs.MASTERED_BOX && progress.card(it).isMastered }
             roundSummary = RoundSummary(s.kind, round.score, round.total, round.mistakes, mastered)
             quiz = null
+            roundStart = emptyMap()
             screen = Screen.RoundEnd
         } else {
             quiz = QuizState(kind = s.kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)))
         }
+        saveSession()
     }
 
     // Mock exam
@@ -184,7 +228,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startExam() {
         val e = Exam.start(ids, clock(), random)
         exam = ExamState(e, shuffledOrder(byId.getValue(e.current!!)))
+        saveSession()
         screen = Screen.ExamRun
+    }
+
+    fun resumeExam() {
+        if (exam != null) screen = Screen.ExamRun
+    }
+
+    fun discardExam() {
+        exam = null
+        saveSession()
     }
 
     fun examPick(index: Int) {
@@ -197,6 +251,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             else -> s.selected
         }
         exam = s.copy(selected = sel)
+        saveSession()
     }
 
     fun examNext() {
@@ -208,6 +263,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             finishExam(e)
         } else {
             exam = ExamState(e, shuffledOrder(byId.getValue(e.current!!)))
+            saveSession()
         }
     }
 
@@ -220,6 +276,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         persist(progress.copy(cards = cards))
         examSummary = ExamSummary(res, e)
         exam = null
+        saveSession()
         screen = Screen.ExamEnd
     }
 
@@ -229,9 +286,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         screen = Screen.Browse(topic)
     }
 
+    /** Leaving mid-round or mid-exam keeps it open (and saved); Domov offers to continue. */
     fun home() {
-        quiz = null
-        exam = null
         screen = Screen.Home
     }
 
@@ -251,6 +307,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         examSummary: ExamSummary? = null,
     ) {
         store = dev.hamper.uli.data.MemoryProgressStore(data)
+        sessionStore = MemorySessionStore()
         seededShuffle = true
         shotMode = true
         random = Random(42)

@@ -92,6 +92,24 @@ object Code {
     private fun endsClause(text: String, t: Token): Boolean =
         t.coreStart + t.core.length < t.end && text[t.coreStart + t.core.length] in charArrayOf(',', ':', ';', ')', '.')
 
+    private const val WORD_JOINER = '\u2060'
+
+    /**
+     * Inline code that must not break inside a path or flag: a word joiner after every "/" and "-"
+     * ("/usr/bin/program" moves to the next line whole instead of "/ usr"). Short code keeps its
+     * spaces unbreakable too; long code may still wrap at a space.
+     */
+    fun unbreakable(code: String, keepTogether: Int = 24): String = buildString(code.length + 8) {
+        val glueSpaces = code.length <= keepTogether
+        for (ch in code) {
+            append(if (ch == ' ' && glueSpaces) '\u00A0' else ch)
+            if (ch == '/' || ch == '-') append(WORD_JOINER)
+        }
+    }
+
+    /** Terminal lines wrap at spaces only, never right after a "/" inside a path. */
+    fun gluePaths(line: String): String = line.replace("/", "/$WORD_JOINER")
+
     /** Option texts that are commands, paths, flags or keys, when most options of the question are. */
     fun codeOptions(q: Question): Set<Int> {
         if (q.kind == Kind.TrueFalse) return emptySet()

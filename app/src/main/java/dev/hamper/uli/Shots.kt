@@ -84,6 +84,33 @@ object Shots {
                 vm.installShot(data, NOW, Screen.ExamEnd, examSummary = ExamSummary(e.result(vm.byId), e))
             }
             "browse" -> vm.installShot(data, NOW, Screen.Browse(expanded = 2))
+            // Extra states for manual checks (not in the frozen capture list).
+            "q-retry" -> {
+                // Q61 (users, the longest topic name) coming back as a correction.
+                val ids = listOf(61, 12, 30, 44, 67)
+                val r = Round(ids).answer(false).next().answer(true).next().answer(true).next()
+                val q = vm.byId.getValue(r.current!!)
+                vm.installShot(data, NOW, Screen.Quiz, quiz = QuizState(RoundKind.Smart, r, vm.orderFor(q)))
+            }
+            "q-disputed" -> {
+                val r = Round(listOf(33, 12, 30))
+                val q = vm.byId.getValue(33)
+                val pick = q.options.indexOfFirst { it.text == "tar -tf foo.tar.gz" }
+                val state = QuizState(RoundKind.Smart, r.answer(false), vm.orderFor(q), selected = setOf(pick), answered = true, correct = false)
+                vm.installShot(data, NOW, Screen.Quiz, quiz = state)
+            }
+            "home-fresh" -> vm.installShot(ProgressData(), NOW, Screen.Home)
+            "home-open" -> {
+                val r = Round(roundIds).answer(true).next().answer(true).next()
+                val q = vm.byId.getValue(r.current!!)
+                var e = Exam.start(vm.ids, NOW - 9 * 60 * MIN / 60, Random(3))
+                repeat(12) { e = e.answer(vm.byId.getValue(e.current!!).correctIndices, NOW) }
+                vm.installShot(
+                    data, NOW, Screen.Home,
+                    quiz = QuizState(RoundKind.Smart, r, vm.orderFor(q)),
+                    exam = ExamState(e, vm.orderFor(vm.byId.getValue(e.current!!))),
+                )
+            }
             else -> vm.installShot(data, NOW, Screen.Home)
         }
     }

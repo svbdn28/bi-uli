@@ -1,11 +1,13 @@
 package dev.hamper.uli.engine
 
+import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
 /**
  * One learning round. A wrong card comes back [gap] positions later and keeps coming back
  * until it is answered right; only the first attempt counts for the score and the boxes.
  */
+@Serializable
 data class Round(
     val ids: List<Int>,
     val queue: List<Int> = ids,
@@ -20,6 +22,8 @@ data class Round(
     val score: Int get() = firstAttempt.values.count { it }
     val total: Int get() = ids.size
     val mistakes: List<Int> get() = ids.filter { firstAttempt[it] == false }
+    /** Right first attempts in a row, counting back from the latest. */
+    val streak: Int get() = firstAttempt.values.reversed().takeWhile { it }.size
 
     /** Position of the current card among the round's original cards, 1-based, for "4/10". */
     val displayNumber: Int get() = queue.take(index + 1).distinct().size.coerceAtMost(total)
@@ -39,6 +43,7 @@ data class Round(
 }
 
 /** The mock exam: [size] random questions, one pass, no feedback until the end. */
+@Serializable
 data class Exam(
     val ids: List<Int>,
     val index: Int = 0,

@@ -145,9 +145,8 @@ private fun BrowseRow(q: Question, card: CardState, open: Boolean, showSk: Boole
                         q.question,
                         if (open) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
                         english = true,
-                        maxLines = if (open) Int.MAX_VALUE else 2,
                     )
-                    if (open && showSk) {
+                    if (open && showSk && q.hasDistinctSk) {
                         Spacer(Modifier.height(4.dp))
                         CodeText(q.questionSk, MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

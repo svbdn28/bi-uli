@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
@@ -36,17 +37,26 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.Morph
+import dev.hamper.uli.engine.Code
 import dev.hamper.uli.engine.Question
 import dev.hamper.uli.ui.theme.Mono
 import dev.hamper.uli.ui.theme.Uli
@@ -120,36 +130,52 @@ fun OptionCard(
             else -> {}
         }
     }
-    val pressScale by animateFloatAsState(if (pressed) 0.975f else 1f, motion.fastSpatialSpec(), label = "press")
+    // A tappable card stands on a thin ledge and sinks onto it under the thumb; once answered it settles flat.
+    val ledge by animateDpAsState(if (onClick != null) LEDGE else 0.dp, motion.defaultSpatialSpec(), label = "ledge")
+    val sink by animateDpAsState(if (pressed) ledge else 0.dp, motion.fastSpatialSpec(), label = "sink")
+    val ledgeColor = if (state == OptState.Selected) scheme.primary.copy(alpha = 0.55f) else scheme.outlineVariant
+    val shape = RoundedCornerShape(corner)
 
+    Box(
+        modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = pop.value
+                scaleY = pop.value
+                translationX = shake.value * density
+            }
+            .alpha(if (state == OptState.Dim) 0.45f else 1f)
+            .drawBehind {
+                if (ledge > 0.dp) {
+                    val l = ledge.toPx()
+                    val outline = shape.createOutline(Size(size.width, size.height - LEDGE.toPx()), layoutDirection, this)
+                    translate(top = LEDGE.toPx() - (LEDGE.toPx() - l)) { drawOutline(outline, ledgeColor) }
+                }
+            }
+            .padding(bottom = LEDGE),
+    ) {
     Surface(
         onClick = { onClick?.invoke() },
         enabled = onClick != null,
         interactionSource = interaction,
-        shape = RoundedCornerShape(corner),
+        shape = shape,
         color = container,
         contentColor = content,
         border = border,
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                val s = pop.value * pressScale
-                scaleX = s
-                scaleY = s
-                translationX = shake.value * density
-            }
-            .alpha(if (state == OptState.Dim) 0.45f else 1f),
+            .graphicsLayer { translationY = sink.toPx() },
     ) {
         Column {
             Row(
-                Modifier.heightIn(min = 64.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                Modifier.heightIn(min = 68.dp).padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OptionBadge(letter, state, multi)
                 Spacer(Modifier.width(14.dp))
                 if (code) {
                     Text(
-                        text,
+                        Code.gluePaths(text),
                         fontFamily = Mono,
                         fontWeight = FontWeight.W500,
                         fontSize = 16.sp,
@@ -174,7 +200,10 @@ fun OptionCard(
             }
         }
     }
+    }
 }
+
+private val LEDGE = 4.dp
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -240,7 +269,7 @@ private fun OptionBadge(letter: Char, state: OptState, multi: Boolean) {
 @Composable
 fun Explanation(q: Question, wrongNotes: List<String>, modifier: Modifier = Modifier) {
     val c = Uli.colors
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         for (note in wrongNotes) {
             Surface(color = c.wrongContainer.copy(alpha = 0.55f), contentColor = c.onWrongContainer, shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -250,17 +279,53 @@ fun Explanation(q: Question, wrongNotes: List<String>, modifier: Modifier = Modi
                 }
             }
         }
-        CodeText(q.explanation, MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        CodeText(
+            q.explanation,
+            MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         q.hook?.let { Hook(it) }
         q.demo?.let { Terminal(it) }
-        if (q.disputed) {
-            Tag(
-                "Na skúške vs. v praxi",
-                container = Color.Transparent,
-                content = MaterialTheme.colorScheme.onSurfaceVariant,
-                icon = UliIcons.Balance,
-                modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
-            )
+        q.disputedNote?.let { Disputed(it) }
+    }
+}
+
+/** "Na skúške vs. v praxi": one tap shows what real Linux does where the exam key disagrees. */
+@Composable
+fun Disputed(note: String) {
+    var open by remember(note) { mutableStateOf(false) }
+    val scheme = MaterialTheme.colorScheme
+    val corner by animateDpAsState(if (open) 20.dp else 24.dp, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "dcorner")
+    Surface(
+        onClick = { open = !open },
+        shape = RoundedCornerShape(corner),
+        color = if (open) scheme.surfaceContainerHigh else Color.Transparent,
+        contentColor = scheme.onSurfaceVariant,
+        border = BorderStroke(1.dp, scheme.outlineVariant),
+        modifier = Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
+    ) {
+        Column(Modifier.padding(start = 14.dp, end = 10.dp, top = 6.dp, bottom = if (open) 14.dp else 6.dp)) {
+            Row(Modifier.heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(UliIcons.Balance, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Na skúške vs. v praxi", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (open) "Skryť" else "Ukázať",
+                    modifier = Modifier.size(20.dp).rotate(if (open) 180f else 0f),
+                )
+            }
+            if (open) {
+                Spacer(Modifier.height(4.dp))
+                CodeText(note, MaterialTheme.typography.bodyMedium, color = scheme.onSurface, modifier = Modifier.padding(end = 6.dp))
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Na skúške platí kľúč, odpovedz podľa neho.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -272,15 +337,15 @@ fun Hook(text: String) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (MaterialTheme.colorScheme.primary == c.amber) 0.55f else 0.5f))
-            .padding(12.dp),
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (MaterialTheme.colorScheme.primary == c.amber) 0.45f else 0.38f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ShapeBadge(UliIcons.Lightbulb, Shapes.flower, c.amber, c.onAmber, size = 40.dp, iconSize = 20.dp)
+        ShapeBadge(UliIcons.Lightbulb, Shapes.flower, c.amber, c.onAmber, size = 34.dp, iconSize = 18.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Zapamätaj si", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
-            CodeText(text, MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text("Zapamätaj si", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f))
+            CodeText(text, MaterialTheme.typography.titleMedium.copy(lineHeight = 23.sp), color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }
@@ -301,7 +366,7 @@ fun CorrectAnswers(q: Question, codeOptions: Set<Int>) {
                 Spacer(Modifier.width(10.dp))
                 val t = q.options[i].text
                 if (i in codeOptions) {
-                    Text(t, fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onRightContainer)
+                    Text(Code.gluePaths(t), fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onRightContainer)
                 } else {
                     Text(t, style = MaterialTheme.typography.bodyMedium, color = c.onRightContainer)
                 }
@@ -327,7 +392,7 @@ fun WrongAnswers(q: Question, picked: Set<Int>, codeOptions: Set<Int>) {
                 Spacer(Modifier.width(10.dp))
                 val t = q.options[i].text
                 if (i in codeOptions) {
-                    Text(t, fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onWrongContainer)
+                    Text(Code.gluePaths(t), fontFamily = Mono, fontWeight = FontWeight.W500, fontSize = 15.sp, color = c.onWrongContainer)
                 } else {
                     Text(t, style = MaterialTheme.typography.bodyMedium, color = c.onWrongContainer)
                 }

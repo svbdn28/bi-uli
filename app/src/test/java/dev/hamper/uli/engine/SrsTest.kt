@@ -14,7 +14,8 @@ class SrsTest {
     @Test
     fun rightAnswerClimbsOneBoxAndCapsAtFive() {
         var s = CardState()
-        val boxes = (1..7).map { s = Srs.answer(s, correct = true, now = now); s.box }
+        // Each answer waits until the card is due again.
+        val boxes = (1..7).map { s = Srs.answer(s, correct = true, now = maxOf(now, s.dueAt)); s.box }
         assertEquals(listOf(1, 2, 3, 4, 5, 5, 5), boxes)
         assertEquals(7, s.timesRight)
         assertEquals(0, s.timesWrong)
@@ -78,17 +79,59 @@ class SrsTest {
     }
 
     @Test
-    fun mistakesAreWrongCardsBelowMastery() {
+    fun mistakesAreWrongCardsBelowMasteryDueFirst() {
         val order = (1..6).toList()
         val cards = mapOf(
-            1 to CardState(box = 1, timesWrong = 1),
+            1 to CardState(box = 1, timesWrong = 1, dueAt = now - 1),
             2 to CardState(box = 3, timesWrong = 2), // climbed back
-            3 to CardState(box = 2, timesWrong = 4),
-            4 to CardState(box = 1, timesWrong = 3),
+            3 to CardState(box = 2, timesWrong = 4, dueAt = now + hour), // not due yet: last
+            4 to CardState(box = 1, timesWrong = 3, dueAt = now - 5),
             5 to CardState(box = 2, timesWrong = 0),
         )
-        assertEquals(listOf(4, 1, 3), Srs.mistakes(order, ProgressData(cards = cards)))
-        assertTrue(Srs.mistakes(order, ProgressData()).isEmpty())
+        val p = ProgressData(cards = cards)
+        assertEquals(listOf(4, 1, 3), Srs.mistakes(order, p, now))
+        assertEquals(listOf(4, 1), Srs.mistakes(order, p, now, size = 2))
+        assertTrue(Srs.mistakes(order, ProgressData(), now).isEmpty())
+    }
+
+    @Test
+    fun rightAnswerBeforeDueOnlyMarksSeen() {
+        val early = CardState(box = 2, lastSeenAt = now - hour, dueAt = now + hour, timesRight = 1)
+        val s = Srs.answer(early, correct = true, now = now)
+        assertEquals(2, s.box)
+        assertEquals(now + hour, s.dueAt)
+        assertEquals(now, s.lastSeenAt)
+        assertEquals(1, s.timesRight)
+    }
+
+    @Test
+    fun rightAnswerWhenDueOrNewClimbs() {
+        assertEquals(3, Srs.answer(CardState(box = 2, dueAt = now), correct = true, now = now).box)
+        assertEquals(1, Srs.answer(CardState(), correct = true, now = now).box)
+    }
+
+    @Test
+    fun wrongAnswerDemotesEvenBeforeDue() {
+        val s = Srs.answer(CardState(box = 5, dueAt = now + 7 * day), correct = false, now = now)
+        assertEquals(1, s.box)
+        assertEquals(now + 10 * min, s.dueAt)
+    }
+
+    @Test
+    fun drillingTheSameCardsAgainAndAgainDoesNotMasterThem() {
+        // The round-1 bug: Chyby rounds and mock exams back to back pushed cards to mastered in minutes.
+        var s = Srs.answer(CardState(box = 2, timesWrong = 1, dueAt = now), correct = false, now = now)
+        for (minute in 1..6) s = Srs.answer(s, correct = true, now = now + minute * min)
+        assertEquals(1, s.box)
+        assertTrue(Srs.isMistake(s))
+        // Once due (10 min later) a right answer climbs one box, and the next one has to wait 4 hours.
+        s = Srs.answer(s, correct = true, now = now + 10 * min)
+        assertEquals(2, s.box)
+        s = Srs.answer(s, correct = true, now = now + 11 * min)
+        assertEquals(2, s.box)
+        s = Srs.answer(s, correct = true, now = now + 10 * min + 4 * hour)
+        assertEquals(3, s.box)
+        assertFalse(Srs.isMistake(s))
     }
 
     @Test
