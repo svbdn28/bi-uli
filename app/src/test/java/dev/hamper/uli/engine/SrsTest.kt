@@ -44,11 +44,115 @@ class SrsTest {
     @Test
     fun readinessAveragesProbabilityByBox() {
         val ids = listOf(1, 2, 3, 4, 5, 6)
-        val p = ProgressData(cards = (0..5).associate { (it + 1) to CardState(box = it) })
-        val expected = (0.25 + 0.5 + 0.7 + 0.85 + 0.93 + 0.97) / 6
+        val p = ProgressData(cards = (0..5).associate { (it + 1) to CardState(box = it, timesRight = it) })
+        val expected = (0.25 + 0.6 + 0.75 + 0.85 + 0.93 + 0.97) / 6
         assertEquals(expected, Srs.readiness(ids, p), 1e-9)
         assertEquals(0.25, Srs.readiness(ids, ProgressData()), 1e-9)
         assertEquals(3, Srs.masteredCount(ids, p))
+    }
+
+    // The exam estimate is honest: misses never raise it, hits do.
+
+    /** One state of every kind the engine can produce, old saves (no lastWrong) included. */
+    private val zoo: List<CardState> = buildList {
+        add(CardState())
+        for (box in 1..5) {
+            add(CardState(box = box, timesRight = box, dueAt = now - 1, lastWrong = false))
+            add(CardState(box = box, timesRight = box, dueAt = now + day, lastWrong = false))
+            add(CardState(box = box, timesRight = box, timesWrong = 2, dueAt = now - 1))
+        }
+        add(CardState(box = 1, timesWrong = 1, dueAt = now + 5 * min, lastWrong = true))
+        add(CardState(box = 1, timesWrong = 1, dueAt = now + 5 * min, lastWrong = false))
+        add(CardState(box = 1, timesWrong = 3, timesRight = 1, dueAt = now + 5 * min)) // old save
+    }
+
+    @Test
+    fun aWrongAnswerNeverRaisesACardAndARightOneNeverLowersIt() {
+        for (s in zoo) {
+            val before = Srs.pCorrect(s)
+            assertTrue("wrong raised $s", Srs.pCorrect(Srs.answer(s, false, now)) <= before)
+            assertTrue("right lowered $s", Srs.pCorrect(Srs.answer(s, true, now)) >= before)
+        }
+    }
+
+    @Test
+    fun aJustMissedCardCountsBelowAnUnseenGuess() {
+        val missed = Srs.answer(CardState(box = 4, timesRight = 4), false, now)
+        assertTrue(Srs.pCorrect(missed) < Srs.pCorrect(CardState()))
+        val rightOnce = Srs.answer(CardState(), true, now)
+        assertTrue(Srs.pCorrect(rightOnce) > Srs.pCorrect(CardState()))
+        // Fixed again right after the miss: better than the miss, not yet as good as a clean hit.
+        val fixed = Srs.answer(missed, true, now + min)
+        assertTrue(Srs.pCorrect(fixed) > Srs.pCorrect(missed))
+        assertTrue(Srs.pCorrect(fixed) < Srs.pCorrect(rightOnce))
+    }
+
+    private val pool = (1..70).toList()
+
+    /** Fresh, mid-way (some mastered, some missed) and nearly done, all at [now]. */
+    private val starts: List<ProgressData> = listOf(
+        ProgressData(),
+        ProgressData(cards = pool.take(40).associateWith { id ->
+            when (id % 4) {
+                0 -> CardState(box = 4, timesRight = 4, dueAt = now - 1)
+                1 -> CardState(box = 1, timesWrong = 1, dueAt = now - 1, lastWrong = true)
+                2 -> CardState(box = 2, timesRight = 2, dueAt = now + hour)
+                else -> CardState(box = 1, timesRight = 1, dueAt = now - 1)
+            }
+        }),
+        ProgressData(cards = pool.associateWith { CardState(box = 5, timesRight = 5, dueAt = now + day) }),
+    )
+
+    private fun play(start: ProgressData, ids: List<Int>, correct: (Int) -> Boolean): ProgressData =
+        start.copy(cards = start.cards + ids.associateWith { Srs.answer(start.card(it), correct(it), now) })
+
+    @Test
+    fun anAllWrongRoundNeverIncreasesTheEstimate() {
+        for (start in starts) {
+            val round = Srs.buildRound(pool, start, now)
+            val before = Srs.readiness(pool, start)
+            val after = Srs.readiness(pool, play(start, round) { false })
+            assertTrue("all wrong raised $before to $after", after < before)
+        }
+    }
+
+    @Test
+    fun anAllRightRoundIncreasesTheEstimate() {
+        // The last start (everything mastered, nothing due) has nothing to gain from an early repeat.
+        for (start in starts.dropLast(1)) {
+            val round = Srs.buildRound(pool, start, now)
+            val before = Srs.readiness(pool, start)
+            val after = Srs.readiness(pool, play(start, round) { true })
+            assertTrue("all right left $before at $after", after > before)
+        }
+        val done = starts.last()
+        assertEquals(Srs.readiness(pool, done), Srs.readiness(pool, play(done, Srs.buildRound(pool, done, now)) { true }), 1e-9)
+    }
+
+    @Test
+    fun aMockExamOf41Of50LandsWhereItsAnswersPutIt() {
+        val asked = pool.shuffled(kotlin.random.Random(1)).take(50)
+        val missed = asked.take(9).toSet()
+        fun mock(wrong: Set<Int>) = play(ProgressData(), asked) { it !in wrong }
+        val after = mock(missed)
+        // The 41 hits and the 9 misses each count at their own weight; the 20 unseen stay a guess.
+        val expected = (41 * 0.6 + 9 * Srs.P_MISSED + 20 * Srs.P_GUESS) / 70
+        assertEquals(expected, Srs.readiness(pool, after), 1e-9)
+        // On the 50 questions asked, the estimate follows the score: hits up, misses down.
+        val onAsked = Srs.readiness(asked, after)
+        assertTrue(onAsked > Srs.readiness(asked, mock(asked.take(20).toSet())))
+        assertTrue(onAsked < Srs.readiness(asked, mock(emptySet())))
+        // The misses alone are below where they started (a guess), the hits above it.
+        assertTrue(Srs.readiness(missed, after) < Srs.P_GUESS)
+        assertTrue(Srs.readiness(asked - missed, after) > Srs.P_GUESS)
+    }
+
+    @Test
+    fun oldSavesWithoutLastWrongInferIt() {
+        assertTrue(CardState(box = 1, timesWrong = 2).justMissed)
+        assertFalse(CardState(box = 1, timesRight = 1).justMissed)
+        assertFalse(CardState(box = 3, timesWrong = 2).justMissed)
+        assertFalse(CardState(box = 1, timesWrong = 2, lastWrong = false).justMissed)
     }
 
     @Test

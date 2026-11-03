@@ -137,6 +137,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** What a Chyby round drills right now (up to a round's worth). */
     fun mistakeIds(): List<Int> = Srs.mistakes(ids, progress, clock())
 
+    /** Every Chyby card, for the true count on Domov (a round still drills up to 10). */
+    fun allMistakeIds(): List<Int> = Srs.allMistakes(ids, progress, clock())
+
     /** Nothing answered yet and nothing open: the main button says "Začať". */
     val isFresh: Boolean get() = progress.cards.isEmpty() && quiz == null
 

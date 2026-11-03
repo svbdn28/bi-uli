@@ -9,9 +9,17 @@ data class CardState(
     val dueAt: Long = 0,
     val timesWrong: Int = 0,
     val timesRight: Int = 0,
+    /** The latest answer was wrong. Null in progress saved before this field existed: then inferred. */
+    val lastWrong: Boolean? = null,
 ) {
     val isNew: Boolean get() = box == 0
     val isMastered: Boolean get() = box >= Srs.MASTERED_BOX
+
+    /**
+     * The latest answer was a miss. Old saves have no [lastWrong]; there a box-1 card with a miss on
+     * record was almost always sent there by that miss (a right answer when due moves it to box 2).
+     */
+    val justMissed: Boolean get() = lastWrong ?: (box == 1 && timesWrong > 0)
 }
 
 @Serializable
@@ -42,14 +50,31 @@ object Srs {
         else -> 7 * DAY
     }
 
-    /** Chance of answering a card right on the exam, by box. Averaged into the exam estimate. */
-    fun pCorrect(box: Int): Double = when (box) {
-        0 -> 0.25
-        1 -> 0.5
-        2 -> 0.7
-        3 -> 0.85
-        4 -> 0.93
-        else -> 0.97
+    /** An unseen card: a blind guess among four options. */
+    const val P_GUESS = 0.25
+
+    /** Just answered wrong: a wrong belief is worse than a blind guess until it is fixed. */
+    const val P_MISSED = 0.2
+
+    /** Missed, then answered right before it came due: fixed for now, but not yet spaced. */
+    const val P_FIXED = 0.45
+
+    /**
+     * Chance of answering this card right on the exam, from its latest evidence. Averaged into the
+     * exam estimate, so a wrong answer can never raise it: a miss always lands at [P_MISSED], the
+     * lowest value, and a right answer always lands at or above where the card was.
+     */
+    fun pCorrect(state: CardState): Double = when {
+        state.isNew -> P_GUESS
+        state.justMissed -> P_MISSED
+        state.box == 1 && state.timesWrong > 0 -> P_FIXED
+        else -> when (state.box) {
+            1 -> 0.6
+            2 -> 0.75
+            3 -> 0.85
+            4 -> 0.93
+            else -> 0.97
+        }
     }
 
     /**
@@ -63,17 +88,19 @@ object Srs {
             lastSeenAt = now,
             dueAt = now + interval(1),
             timesWrong = state.timesWrong + 1,
+            lastWrong = true,
         )
         state.isNew || state.dueAt <= now -> {
             val box = (state.box + 1).coerceAtMost(MAX_BOX)
-            state.copy(box = box, lastSeenAt = now, dueAt = now + interval(box), timesRight = state.timesRight + 1)
+            state.copy(box = box, lastSeenAt = now, dueAt = now + interval(box), timesRight = state.timesRight + 1, lastWrong = false)
         }
-        else -> state.copy(lastSeenAt = now)
+        // Early: no box climb, but a missed card answered right again is no longer "just missed".
+        else -> state.copy(lastSeenAt = now, lastWrong = false)
     }
 
     /** Expected share of correct answers on the exam (questions are drawn uniformly from the pool). */
     fun readiness(ids: Collection<Int>, progress: ProgressData): Double =
-        if (ids.isEmpty()) 0.0 else ids.sumOf { pCorrect(progress.card(it).box) } / ids.size
+        if (ids.isEmpty()) 0.0 else ids.sumOf { pCorrect(progress.card(it)) } / ids.size
 
     fun masteredCount(ids: Collection<Int>, progress: ProgressData): Int =
         ids.count { progress.card(it).isMastered }

@@ -52,6 +52,13 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.animation.animateContentSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,6 +86,7 @@ fun OptionCard(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     note: String? = null,
+    picked: Boolean = state == OptState.Selected || state == OptState.Wrong,
 ) {
     val c = Uli.colors
     val scheme = MaterialTheme.colorScheme
@@ -164,7 +172,14 @@ fun OptionCard(
         border = border,
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { translationY = sink.toPx() },
+            .graphicsLayer { translationY = sink.toPx() }
+            // TalkBack hears a checkbox (pick several) or a radio button (pick one), checked when picked,
+            // and after the answer what the card turned out to be.
+            .semantics {
+                role = if (multi) Role.Checkbox else Role.RadioButton
+                if (multi) toggleableState = ToggleableState(picked) else selected = picked
+                answerDescription(state, picked)?.let { stateDescription = it }
+            },
     ) {
         Column {
             Row(
@@ -204,6 +219,13 @@ fun OptionCard(
 }
 
 private val LEDGE = 4.dp
+
+private fun answerDescription(state: OptState, picked: Boolean): String? = when (state) {
+    OptState.Right -> if (picked) "Tvoja odpoveď, správna" else "Správna odpoveď"
+    OptState.Wrong -> "Tvoja odpoveď, nesprávna"
+    OptState.Missed -> "Správna odpoveď, nevybraná"
+    else -> null
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -252,9 +274,10 @@ private fun OptionBadge(letter: Char, state: OptState, multi: Boolean) {
         contentAlignment = Alignment.Center,
     ) {
         when (state) {
-            OptState.Right -> Icon(Icons.Filled.Check, "Správne", tint = onFill, modifier = Modifier.size(20.dp))
-            OptState.Wrong -> Icon(Icons.Filled.Close, "Nesprávne", tint = onFill, modifier = Modifier.size(20.dp))
-            OptState.Missed -> Icon(Icons.Filled.Check, "Správna, nevybraná", tint = c.right, modifier = Modifier.size(20.dp))
+            // The card's state description says it; the icons stay silent.
+            OptState.Right -> Icon(Icons.Filled.Check, null, tint = onFill, modifier = Modifier.size(20.dp))
+            OptState.Wrong -> Icon(Icons.Filled.Close, null, tint = onFill, modifier = Modifier.size(20.dp))
+            OptState.Missed -> Icon(Icons.Filled.Check, null, tint = c.right, modifier = Modifier.size(20.dp))
             OptState.Selected -> if (multi) {
                 Icon(Icons.Filled.Check, null, tint = onFill, modifier = Modifier.size(20.dp))
             } else {
@@ -270,9 +293,17 @@ private fun OptionBadge(letter: Char, state: OptState, multi: Boolean) {
  * hook and the terminal demo. Only the terminal keeps a box; the rest is plain type on the sheet.
  */
 @Composable
-fun Explanation(q: Question, wrongNotes: List<String>, modifier: Modifier = Modifier) {
+fun Explanation(
+    q: Question,
+    wrongNotes: List<String>,
+    modifier: Modifier = Modifier,
+    showHook: Boolean = true,
+    prose: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
+    proseColor: Color = MaterialTheme.colorScheme.onSurface,
+    gap: androidx.compose.ui.unit.Dp = 16.dp,
+) {
     val c = Uli.colors
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
         for (note in wrongNotes) {
             Surface(color = c.wrongContainer.copy(alpha = 0.55f), contentColor = c.onWrongContainer, shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -282,12 +313,8 @@ fun Explanation(q: Question, wrongNotes: List<String>, modifier: Modifier = Modi
                 }
             }
         }
-        CodeText(
-            q.explanation,
-            MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        q.hook?.let { Hook(it) }
+        CodeText(q.explanation, prose, color = proseColor)
+        if (showHook) q.hook?.let { Hook(it) }
         q.demo?.let { Terminal(it) }
         q.disputedNote?.let { Disputed(it) }
     }

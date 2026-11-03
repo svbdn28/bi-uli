@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Outline
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -160,8 +162,9 @@ fun CodeText(
 
 /**
  * The demo as a little terminal: prompts in amber, commands bright, output dimmed.
- * The font is sized so a [TERMINAL_COLUMNS]-column line fits the block at font scale 1.0 (every demo is
- * written to that width). At larger font scales a line soft-wraps with a hanging indent instead.
+ * It is a code sample, so it is sized by width, not by the system font scale: the font is whatever makes
+ * a [TERMINAL_COLUMNS]-column line (every demo is written to that width) fill the block. Only on a screen
+ * so narrow that this would go below a readable 10 sp does a line soft-wrap, with a hanging indent.
  */
 @Composable
 fun Terminal(demo: String, modifier: Modifier = Modifier) {
@@ -180,15 +183,19 @@ fun Terminal(demo: String, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(6.dp))
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
-            // JetBrains Mono advances 0.6 em per glyph; sp equals dp at font scale 1.0.
-            val fitted = (maxWidth.value / (TERMINAL_COLUMNS * 0.6f + 0.4f)).coerceIn(10.5f, 14f)
-            val style = TextStyle(
-                fontFamily = Mono,
-                fontSize = fitted.sp,
-                lineHeight = (fitted * 1.45f).sp,
-                // Soft wrap fallback: a continuation starts two columns in, so it still reads as one line.
-                textIndent = TextIndent(firstLine = 0.sp, restLine = (fitted * 0.6f * 2).sp),
-            )
+            // JetBrains Mono advances 0.6 em per glyph. The size is worked out in dp and divided by the font
+            // scale, so the system setting cannot push a 44-column line onto two rows.
+            val fittedDp = (maxWidth.value / (TERMINAL_COLUMNS * 0.6f + 0.4f)).coerceIn(10f, 14f)
+            // (toSp also undoes Android 14's non-linear scaling.)
+            val style = with(LocalDensity.current) {
+                TextStyle(
+                    fontFamily = Mono,
+                    fontSize = fittedDp.dp.toSp(),
+                    lineHeight = (fittedDp * 1.45f).dp.toSp(),
+                    // Soft wrap fallback: a continuation starts two columns in, so it still reads as one line.
+                    textIndent = TextIndent(firstLine = 0.sp, restLine = (fittedDp * 0.6f * 2).dp.toSp()),
+                )
+            }
             Column {
                 for (line in demo.lines()) {
                     val text = buildAnnotatedString {
@@ -227,12 +234,12 @@ fun ShapeBadge(
     }
 }
 
-enum class Seg { Right, Wrong, Current, Upcoming }
+enum class Seg { Right, Wrong, Current, Retry, Upcoming }
 
 /**
  * Round progress: one pill per card, colored by the first attempt. Right answers in a row fuse into one
- * bar (a streak you can see), and the card you are on is a gently moving wave, so the round reads as
- * something in motion even before you answer.
+ * bar (a streak you can see). The card you are on is a wave that runs from a faint tail into a bright
+ * head, so it reads as moving forward even in a still frame; a correction runs the same way in red.
  */
 @Composable
 fun SegmentedProgress(segments: List<Seg>, modifier: Modifier = Modifier, animate: Boolean = true) {
@@ -240,7 +247,8 @@ fun SegmentedProgress(segments: List<Seg>, modifier: Modifier = Modifier, animat
     val primary = MaterialTheme.colorScheme.primary
     val wave = rememberInfiniteTransition(label = "wave")
     val phase by wave.animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "phase")
-    Row(modifier.height(12.dp), verticalAlignment = Alignment.CenterVertically) {
+    val shine = Color.White.copy(alpha = 0.28f)
+    Row(modifier.height(14.dp), verticalAlignment = Alignment.CenterVertically) {
         segments.forEachIndexed { i, s ->
             val prevRight = s == Seg.Right && segments.getOrNull(i - 1) == Seg.Right
             val nextRight = s == Seg.Right && segments.getOrNull(i + 1) == Seg.Right
@@ -248,43 +256,55 @@ fun SegmentedProgress(segments: List<Seg>, modifier: Modifier = Modifier, animat
             val color by animateColorAsState(
                 when (s) {
                     Seg.Right -> c.right
-                    Seg.Wrong -> c.wrong
+                    Seg.Wrong, Seg.Retry -> c.wrong
                     Seg.Current -> primary
                     Seg.Upcoming -> MaterialTheme.colorScheme.surfaceContainerHighest
                 },
                 MaterialTheme.motionScheme.defaultEffectsSpec(),
                 label = "seg",
             )
-            if (s == Seg.Current) {
-                Canvas(Modifier.weight(1.8f).fillMaxHeight()) {
+            if (s == Seg.Current || s == Seg.Retry) {
+                Canvas(Modifier.weight(2f).fillMaxHeight()) {
                     val stroke = 4.dp.toPx()
                     val amp = 2.6.dp.toPx()
                     val length = 11.dp.toPx()
+                    val head = 4.5.dp.toPx()
                     val shift = (if (animate) phase else 0.25f) * length
                     val mid = size.height / 2
+                    val end = size.width - head
                     val path = Path()
                     var x = stroke / 2
                     path.moveTo(x, mid + amp * sin((x + shift) / length * 2 * PI).toFloat())
-                    while (x < size.width - stroke / 2) {
-                        x = (x + 1.dp.toPx()).coerceAtMost(size.width - stroke / 2)
+                    while (x < end) {
+                        x = (x + 1.dp.toPx()).coerceAtMost(end)
                         path.lineTo(x, mid + amp * sin((x + shift) / length * 2 * PI).toFloat())
                     }
-                    drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
+                    drawPath(
+                        path,
+                        Brush.horizontalGradient(listOf(color.copy(alpha = 0.25f), color), startX = 0f, endX = end),
+                        style = Stroke(width = stroke, cap = StrokeCap.Round),
+                    )
+                    val y = mid + amp * sin((end + shift) / length * 2 * PI).toFloat()
+                    drawCircle(color, radius = head, center = Offset(end, y))
                 }
             } else {
-                val r = 3.dp
+                val r = 4.dp
+                val shape = RoundedCornerShape(
+                    topStart = if (prevRight) 0.dp else r, bottomStart = if (prevRight) 0.dp else r,
+                    topEnd = if (nextRight) 0.dp else r, bottomEnd = if (nextRight) 0.dp else r,
+                )
                 Box(
                     Modifier
                         .weight(1f)
-                        .height(6.dp)
-                        .clip(
-                            RoundedCornerShape(
-                                topStart = if (prevRight) 0.dp else r, bottomStart = if (prevRight) 0.dp else r,
-                                topEnd = if (nextRight) 0.dp else r, bottomEnd = if (nextRight) 0.dp else r,
-                            ),
-                        )
+                        .height(8.dp)
+                        .clip(shape)
                         .background(color),
-                )
+                ) {
+                    // A thin highlight on answered pills: filled, not just colored.
+                    if (s == Seg.Right || s == Seg.Wrong) {
+                        Box(Modifier.fillMaxWidth().padding(start = if (prevRight) 0.dp else 3.dp, end = if (nextRight) 0.dp else 3.dp, top = 1.5.dp).height(2.dp).clip(CircleShape).background(shine))
+                    }
+                }
             }
         }
     }

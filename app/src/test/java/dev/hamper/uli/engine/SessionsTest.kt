@@ -13,6 +13,31 @@ class SessionsTest {
     )
 
     @Test
+    fun retryCardsCountAsCorrectionsNotAsTheNextNumber() {
+        var r = Round(ids = listOf(1, 2, 3, 4, 5))
+        assertEquals(0, r.retryNumber)
+        r = r.answer(false).next() // 1 wrong, comes back after 3
+        r = r.answer(false).next() // 2 wrong, comes back after 4
+        assertEquals(2, r.retryTotal)
+        r = r.answer(true).next() // 3
+        assertEquals(1, r.current)
+        assertTrue(r.isRetry)
+        assertEquals(1, r.retryNumber)
+        assertEquals(2, r.retryTotal)
+        r = r.answer(false) // 1 wrong again: a third correction is planned
+        assertEquals(3, r.retryTotal)
+        r = r.next()
+        assertEquals(listOf(1, 2, 3, 1, 2, 4, 1, 5), r.queue)
+        assertEquals(2, r.current)
+        assertEquals(2, r.retryNumber)
+        r = r.answer(true).next() // 2 fixed
+        r = r.answer(true).next() // 4
+        assertEquals(1, r.current)
+        assertEquals(3, r.retryNumber)
+        assertEquals(3, r.retryTotal)
+    }
+
+    @Test
     fun wrongCardComesBackThreePositionsLaterUntilRight() {
         var r = Round(ids = (1..5).toList())
         r = r.answer(false) // 1 wrong

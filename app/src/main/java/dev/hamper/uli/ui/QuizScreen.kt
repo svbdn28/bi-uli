@@ -149,8 +149,11 @@ fun QuizScreen(vm: AppViewModel) {
 @Composable
 private fun RoundTopBar(s: QuizState, onClose: () -> Unit, animate: Boolean) {
     val r = s.round
+    // A correction is a current card too: its red pill becomes the moving head until it is answered.
+    val retrying = r.isRetry && !s.answered
     val segments = r.ids.map { id ->
         when {
+            retrying && id == r.current -> Seg.Retry
             r.firstAttempt[id] == true -> Seg.Right
             r.firstAttempt[id] == false -> Seg.Wrong
             id == r.current -> Seg.Current
@@ -161,16 +164,17 @@ private fun RoundTopBar(s: QuizState, onClose: () -> Unit, animate: Boolean) {
         IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Zavrieť kolo") }
         SegmentedProgress(segments, Modifier.weight(1f).padding(horizontal = 6.dp), animate = animate)
         Spacer(Modifier.width(10.dp))
+        // Corrections do not pretend to be the next card: they count on their own.
         Text(
-            "${r.displayNumber}/${r.total}",
+            if (r.isRetry) "Oprava ${r.retryNumber} z ${r.retryTotal}" else "${r.displayNumber}/${r.total}",
             fontFamily = Rounded,
             fontWeight = FontWeight.W700,
-            fontSize = 17.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = if (r.isRetry) 15.sp else 17.sp,
+            color = if (r.isRetry) Uli.colors.wrong else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
         )
     }
 }
-
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -226,10 +230,8 @@ private fun QuestionBody(
                             compact = compact,
                             keepHintWhenCompact = multi,
                             label = {
+                                // A correction says so in the top bar (red head, "Oprava 1 z 2"), not twice.
                                 Tag(q.topicEnum.title, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                                if (state.round.isRetry && isCurrent) {
-                                    Tag("Oprava", Uli.colors.wrongContainer, Uli.colors.onWrongContainer)
-                                }
                             },
                             hint = {
                                 when {
@@ -269,6 +271,7 @@ private fun QuestionBody(
                                                 multi = multi,
                                                 onClick = if (answered || !isCurrent) null else ({ onPick(i) }),
                                                 note = opt.note,
+                                                picked = i in selected,
                                             )
                                         }
                                     }
@@ -611,8 +614,9 @@ fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit, modifi
 }
 
 /**
- * The why, as a sheet that scrolls with the question. One reading order and one rhythm:
- * verdict, then why, then the tip, then the terminal.
+ * The why, as a sheet that scrolls with the question, built to be read at a glance: the verdict and the
+ * one fact to keep (the memory hook) as a single block, then the reasoning set smaller and quieter, then
+ * the terminal. Two weights of type, one box.
  */
 @Composable
 private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, modifier: Modifier = Modifier) {
@@ -623,29 +627,48 @@ private fun FeedbackPanel(q: Question, correct: Boolean, streak: Int, modifier: 
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 20.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
                 ShapeBadge(
                     if (correct) Icons.Filled.Check else Icons.Filled.Close,
                     if (correct) Shapes.verySunny else Shapes.puffy,
                     accent,
                     if (correct) c.onRight else c.onWrong,
-                    size = 34.dp,
-                    iconSize = 20.dp,
+                    size = 36.dp,
+                    iconSize = 21.dp,
                 )
                 Spacer(Modifier.width(12.dp))
-                Text(
-                    if (correct) "Správne" else "Nesprávne",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = accent,
-                    modifier = Modifier.weight(1f),
-                )
-                if (correct && streak >= 3) {
-                    Tag("$streak za sebou", c.amber, c.onAmber)
+                Column(Modifier.weight(1f)) {
+                    Row(Modifier.heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (correct) "Správne" else "Nesprávne",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = accent,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (correct && streak >= 3) {
+                            Tag("$streak za sebou", c.amber, c.onAmber)
+                        }
+                    }
+                    q.hook?.let { hook ->
+                        Spacer(Modifier.height(4.dp))
+                        CodeText(
+                            hook,
+                            MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.W600),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Explanation(q, emptyList())
+            Spacer(Modifier.height(14.dp))
+            Explanation(
+                q,
+                emptyList(),
+                showHook = false,
+                prose = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
+                proseColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                gap = 14.dp,
+            )
         }
     }
 }

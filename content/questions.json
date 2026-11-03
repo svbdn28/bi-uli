@@ -882,7 +882,7 @@
       }
     ],
     "explanation": "cp kopíruje odniekiaľ niekam, takže potrebuje aspoň dva argumenty. S jedným skončí chybou. Ak chceš kopírovať do aktuálneho adresára, cieľ je bodka: cp /etc/hosts .",
-    "demo": "$ cp notes.txt\ncp: missing destination file operand…\n$ cp notes.txt kopia.txt\n$ ls\nkopia.txt  notes.txt",
+    "demo": "$ cp\ncp: missing file operand\n$ cp notes.txt kopia.txt && ls\nkopia.txt  notes.txt",
     "source": "ok"
   },
   {
@@ -1547,7 +1547,7 @@
     ],
     "explanation": "ifconfig vypíše sieťové rozhrania aj s ich IP adresami. Dnes ho nahrádza ip addr a ifconfig často nie je predinštalovaný, ale na skúške je správne ifconfig. ipconfig je obdoba z Windowsu.",
     "hook": "Linux: ifconfig. Windows: ipconfig.",
-    "demo": "$ sudo apt install net-tools\n…\n$ ifconfig eth0 | awk '/inet /{print $2}'\n192.168.1.20",
+    "demo": "$ sudo apt install net-tools\n…\n$ ifconfig enp0s3 | awk '/inet /{print $2}'\n10.0.2.15",
     "source": "ok"
   },
   {
@@ -1569,7 +1569,7 @@
     ],
     "explanation": "dig sa nikam neprihlasuje, len posiela DNS dotazy (napríklad akú IP adresu má doména). Odtlačok kľúča overuje identitu servera pri pripojení cez ssh.",
     "hook": "dig = DNS, fingerprint = ssh.",
-    "demo": "$ ssh bob@server\n…\nED25519 key fingerprint is SHA256:7Kq1mW…\nAre you sure you want to continue connecting\n(yes/no/[fingerprint])? yes",
+    "demo": "$ dig +short server.lab\n10.0.0.5\n$ ssh bob@server.lab\n…\nED25519 key fingerprint is SHA256:7Kq1mW…",
     "source": "ok"
   },
   {

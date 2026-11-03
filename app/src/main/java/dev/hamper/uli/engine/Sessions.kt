@@ -25,6 +25,14 @@ data class Round(
     /** Right first attempts in a row, counting back from the latest. */
     val streak: Int get() = firstAttempt.values.reversed().takeWhile { it }.size
 
+    /** Corrections in the queue as planned so far: every repeat of a card counts once. */
+    val retryTotal: Int get() = queue.indices.count { isRepeat(it) }
+
+    /** Which correction the current card is, 1-based ("Oprava 1 z 2"); 0 when it is a first attempt. */
+    val retryNumber: Int get() = if (!isRetry) 0 else (0..index).count { isRepeat(it) }
+
+    private fun isRepeat(pos: Int): Boolean = queue[pos] in queue.subList(0, pos)
+
     /** Position of the current card among the round's original cards, 1-based, for "4/10". */
     val displayNumber: Int get() = queue.take(index + 1).distinct().size.coerceAtMost(total)
 
