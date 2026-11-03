@@ -29,6 +29,9 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -495,7 +498,10 @@ fun BoxScope.ScrollEdges(scroll: ScrollState, color: Color, onMore: (() -> Unit)
     }
 }
 
-/** Options rise in one after another when a question arrives. */
+/**
+ * Options rise in one after another when a question arrives. Until an option is in place it takes no taps:
+ * the bottom one rises where "Ďalej" just was, and a quick second tap there must not answer it.
+ */
 @Composable
 private fun Entrance(index: Int, enabled: Boolean, content: @Composable () -> Unit) {
     val p = remember { Animatable(if (enabled) 0f else 1f) }
@@ -506,12 +512,26 @@ private fun Entrance(index: Int, enabled: Boolean, content: @Composable () -> Un
         }
     }
     Box(
-        Modifier.graphicsLayer {
-            alpha = p.value.coerceIn(0f, 1f)
-            translationY = (1f - p.value) * 28.dp.toPx()
-        },
+        Modifier
+            .graphicsLayer {
+                alpha = p.value.coerceIn(0f, 1f)
+                translationY = (1f - p.value) * 28.dp.toPx()
+            }
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        // Initial pass, before the option's click sees it: a press while still rising is
+                        // swallowed, so that whole tap is ignored. Moves pass through, scrolling still works.
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        if (p.value < SETTLED) e.changes.forEach { if (it.changedToDownIgnoreConsumed()) it.consume() }
+                    }
+                }
+            },
     ) { content() }
 }
+
+/** An option counts as in place (and takes taps) once it has risen this far. */
+private const val SETTLED = 0.9f
 
 /**
  * The question on a warm card that fills the space above the options, signed with the app's mark:

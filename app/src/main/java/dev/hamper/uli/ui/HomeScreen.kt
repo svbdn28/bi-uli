@@ -94,6 +94,8 @@ fun HomeScreen(vm: AppViewModel) {
     var confirmReset by remember { mutableStateOf(false) }
     var confirmDiscardExam by remember { mutableStateOf(false) }
     var confirmDiscardRound by remember { mutableStateOf(false) }
+    var confirmStartFresh by remember { mutableStateOf(false) }
+    val lastExam = vm.examSummary?.takeIf { openExam == null || openExam.exam.index == 0 }
 
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -121,7 +123,7 @@ fun HomeScreen(vm: AppViewModel) {
                         DamagedProgressCard(
                             backupName = damaged.backup?.name,
                             onRetry = vm::retryLoadProgress,
-                            onStartFresh = vm::acceptFreshProgress,
+                            onStartFresh = { confirmStartFresh = true },
                         )
                     }
                 }
@@ -146,8 +148,12 @@ fun HomeScreen(vm: AppViewModel) {
                             container = MaterialTheme.colorScheme.tertiaryContainer,
                             content = MaterialTheme.colorScheme.onTertiaryContainer,
                             onClick = if (openExam != null) vm::resumeExam else vm::startExam,
-                            shape = groupShape(0, 3),
+                            shape = groupShape(0, if (lastExam != null) 4 else 3),
                         )
+                        // The last finished exam's review stays reachable until the next attempt gets an answer.
+                        if (lastExam != null) {
+                            LastExamRow(lastExam.result.correct, lastExam.result.total, lastExam.result.wrong.isNotEmpty(), vm::openLastExam, groupShape(1, 4))
+                        }
                         ModeRow(
                             title = "Chyby",
                             detail = if (drill == 0) "Zatiaľ žiadne" else "$drill ${questionsWord(drill)}",
@@ -158,7 +164,7 @@ fun HomeScreen(vm: AppViewModel) {
                             // A Chyby round replaces the open round, so it asks first.
                             onClick = { if (openRound != null) confirmDiscardRound = true else vm.startMistakes() },
                             enabled = drill > 0,
-                            shape = groupShape(1, 3),
+                            shape = if (lastExam != null) groupShape(2, 4) else groupShape(1, 3),
                         )
                         ModeRow(
                             title = "Všetky otázky",
@@ -168,7 +174,7 @@ fun HomeScreen(vm: AppViewModel) {
                             container = MaterialTheme.colorScheme.secondaryContainer,
                             content = MaterialTheme.colorScheme.onSecondaryContainer,
                             onClick = { vm.openBrowse() },
-                            shape = groupShape(2, 3),
+                            shape = if (lastExam != null) groupShape(3, 4) else groupShape(2, 3),
                         )
                     }
                 }
@@ -261,6 +267,27 @@ fun HomeScreen(vm: AppViewModel) {
         )
     }
 
+    val damaged = vm.damagedProgress
+    if (confirmStartFresh && damaged != null) {
+        AlertDialog(
+            onDismissRequest = { confirmStartFresh = false },
+            title = { Text("Začať odznova?") },
+            text = {
+                Text(
+                    "Poškodený súbor sa prepíše postupom, ktorý máš teraz v aplikácii. " +
+                        (damaged.backup?.let { "Kópia ${it.name} ostane uložená." }
+                            ?: "Zálohu sa nepodarilo vytvoriť, takže starý postup sa už nebude dať obnoviť."),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.acceptFreshProgress(); confirmStartFresh = false }) {
+                    Text("Začať odznova", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmStartFresh = false }) { Text("Zrušiť") } },
+        )
+    }
+
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
@@ -349,17 +376,24 @@ private fun Header(subtitle: String, frozen: Boolean, onReset: () -> Unit) {
     }
 }
 
-/** progress.json could not be read: say so plainly, say the copy is safe, and let the user choose. */
+/**
+ * progress.json could not be read: say so plainly, say whether a copy exists (only when it really does), and
+ * let the user choose.
+ */
 @Composable
 private fun DamagedProgressCard(backupName: String?, onRetry: () -> Unit, onStartFresh: () -> Unit) {
     val c = Uli.colors
     Surface(color = c.wrongContainer, contentColor = c.onWrongContainer, shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 14.dp, bottom = 8.dp)) {
-            Text("Nepodarilo sa načítať tvoj postup, záloha je uložená", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (backupName != null) "Nepodarilo sa načítať tvoj postup, záloha je uložená" else "Nepodarilo sa načítať tvoj postup ani uložiť zálohu",
+                style = MaterialTheme.typography.titleMedium,
+            )
             Spacer(Modifier.height(4.dp))
             Text(
                 (if (backupName != null) "Kópia súboru je v aplikácii ako $backupName. " else "") +
-                    "Kým nevyberieš, pôvodný súbor sa neprepíše. Medzitým sa učíš s prázdnym postupom.",
+                    "Pôvodný súbor sa neprepíše. Medzitým sa učíš s prázdnym postupom.\n" +
+                    "Kým nevyberieš, nový postup sa neukladá.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(end = 8.dp),
             )
@@ -517,6 +551,35 @@ private fun ModeRow(
             Text(title, style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp), modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
             Text(detail, style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+/** A slim row under Skúška nanečisto: the last finished exam's score, a tap opens its result and mistakes. */
+@Composable
+private fun LastExamRow(correct: Int, total: Int, hasMistakes: Boolean, onClick: () -> Unit, shape: androidx.compose.ui.graphics.Shape) {
+    Surface(
+        onClick = onClick,
+        shape = shape,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.heightIn(min = 48.dp).padding(start = 70.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Posledná skúška: $correct/$total · " + if (hasMistakes) "pozrieť chyby" else "pozrieť výsledok",
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 null,

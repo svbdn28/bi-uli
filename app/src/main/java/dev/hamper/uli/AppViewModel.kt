@@ -1,6 +1,7 @@
 package dev.hamper.uli
 
 import android.app.Application
+import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.SavedStateHandle
@@ -32,6 +33,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlin.random.Random
 
 sealed interface Screen {
@@ -57,6 +59,8 @@ data class QuizState(
     val correct: Boolean = false,
     /** [ProgressData.seq] when this question came up: a higher count there means its answer is already in. */
     val seq: Long = 0,
+    /** When this question came up (monotonic ms, 0 = unknown); taps right after it are ignored. Not saved. */
+    @Transient val shownAt: Long = 0,
 )
 
 @Serializable
@@ -64,6 +68,8 @@ data class ExamState(
     val exam: Exam,
     val order: List<Int>,
     val selected: Set<Int> = emptySet(),
+    /** When this question came up (monotonic ms, 0 = unknown); taps right after it are ignored. Not saved. */
+    @Transient val shownAt: Long = 0,
 )
 
 data class RoundSummary(
@@ -92,6 +98,9 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
     private var seededShuffle = false
     var clock: () -> Long = System::currentTimeMillis
         private set
+
+    /** Monotonic time for "this question just came up" (wall-clock jumps must not unlock or lock taps). */
+    private val uptime: () -> Long = SystemClock::elapsedRealtime
 
     var progress by mutableStateOf(ProgressData())
         private set
@@ -145,7 +154,7 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
                 SavedSession()
             }
         }
-        val r = Flow.restore(saved, progress, byId, catchUp = readable)
+        val r = Flow.restore(saved, progress, byId, catchUp = readable, shownAt = uptime())
         quiz = r.quiz
         roundStart = r.roundStart
         exam = r.exam
@@ -223,7 +232,18 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
     /** Tries progress.json again (e.g. after it was restored by hand). */
     fun retryLoadProgress() {
         when (val r = store.load()) {
-            is Loaded.Ok -> { progress = r.data; damagedProgress = null }
+            is Loaded.Ok -> {
+                damagedProgress = null
+                // The open round and exam ran against the empty progress: move them onto the loaded one.
+                val b = Flow.rebase(session(), r.data, byId)
+                quiz = b.quiz
+                roundStart = b.roundStart
+                exam = b.exam
+                lastExam = b.lastExam
+                examSummary = b.lastExam?.let { ExamSummary(it.result(byId), it) }
+                progress = b.progress
+                write(progress = if (b.progressChanged) progress else null, session = session())
+            }
             Loaded.Missing -> { damagedProgress = null; write(progress = progress) }
             is Loaded.Corrupt -> damagedProgress = r
         }
@@ -283,7 +303,7 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
     private fun startRound(kind: RoundKind, roundIds: List<Int>) {
         roundStart = roundIds.associateWith { progress.card(it).box }
         val round = Round(roundIds)
-        quiz = QuizState(kind = kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)), seq = progress.seq)
+        quiz = QuizState(kind = kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)), seq = progress.seq, shownAt = uptime())
         saveSession()
         go(Screen.Quiz)
     }
@@ -294,7 +314,7 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
     fun pick(questionId: Int, index: Int) {
         val s = quiz ?: return
         val q = current() ?: return
-        val picked = Flow.pick(s, q, questionId, index) ?: return
+        val picked = Flow.pick(s, q, questionId, index, uptime()) ?: return
         quiz = picked
         if (q.kind == Kind.Multi) saveSession() else submit(questionId)
     }
@@ -321,7 +341,7 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
             roundStart = emptyMap()
             go(Screen.RoundEnd)
         } else {
-            quiz = QuizState(kind = s.kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)), seq = progress.seq)
+            quiz = QuizState(kind = s.kind, round = round, order = shuffledOrder(byId.getValue(round.current!!)), seq = progress.seq, shownAt = uptime())
         }
         saveSession()
     }
@@ -330,16 +350,20 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
 
     fun startExam() {
         val e = Exam.start(ids, clock(), random)
-        exam = ExamState(e, shuffledOrder(byId.getValue(e.current!!)))
-        // A new attempt replaces the last one's review.
-        lastExam = null
-        examSummary = null
+        exam = ExamState(e, shuffledOrder(byId.getValue(e.current!!)), shownAt = uptime())
+        // The last attempt's review stays until this one has its first answer: an attempt dropped with no
+        // answer does not cost it.
         saveSession()
         go(Screen.ExamRun)
     }
 
     fun resumeExam() {
         if (exam != null) go(Screen.ExamRun)
+    }
+
+    /** Domov's line under Skúška nanečisto: back to the last finished exam's result and mistakes. */
+    fun openLastExam() {
+        if (examSummary != null) go(Screen.ExamEnd)
     }
 
     fun discardExam() {
@@ -356,7 +380,7 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
     fun examPick(questionId: Int, index: Int) {
         val s = exam ?: return
         val q = s.exam.current?.let(byId::get) ?: return
-        exam = Flow.examPick(s, q, questionId, index) ?: return
+        exam = Flow.examPick(s, q, questionId, index, uptime()) ?: return
         saveSession()
     }
 
@@ -365,10 +389,13 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
         val q = s.exam.current?.let(byId::get) ?: return
         if (q.id != questionId || s.selected.size != q.choose) return
         val e = s.exam.answer(s.selected, clock())
+        // A new attempt with an answer replaces the last one's review.
+        lastExam = null
+        examSummary = null
         if (e.isFinished) {
             finishExam(e)
         } else {
-            exam = ExamState(e, shuffledOrder(byId.getValue(e.current!!)))
+            exam = ExamState(e, shuffledOrder(byId.getValue(e.current!!)), shownAt = uptime())
             saveSession()
         }
     }

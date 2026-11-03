@@ -39,9 +39,18 @@ data class ProgressData(
     val seq: Long = 0,
     /** startedAt of the last mock exam whose answers moved the cards (applied once, never again). */
     val examApplied: Long? = null,
+    /**
+     * The round answer that raised [seq] to its current value, so a round restored from a session saved just
+     * before it shows that answer as given instead of taking a different one.
+     */
+    val last: LastAnswer? = null,
 ) {
     fun card(id: Int): CardState = cards[id] ?: CardState()
 }
+
+/** One applied round answer: the question, the picked option indices (original order) and whether it was right. */
+@Serializable
+data class LastAnswer(val questionId: Int, val picked: Set<Int>, val correct: Boolean)
 
 /** Leitner boxes 0 (new) to 5 with short intervals: the exam is days away, not months. */
 object Srs {
