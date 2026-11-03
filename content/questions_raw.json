@@ -1,0 +1,1670 @@
+[
+ {
+  "q": "Embedded Systems means:",
+  "hint": [],
+  "raw_q": "Embedded Systems means:",
+  "options": [
+   {
+    "text": "Companies must share their changes",
+    "correct": false
+   },
+   {
+    "text": "You can view the software’s source code",
+    "correct": false
+   },
+   {
+    "text": "Businesses cannot charge anything for the software, only the hardware",
+    "correct": false
+   },
+   {
+    "text": "Systems designed to do a specific task on hardware optimized for only that purpose",
+    "correct": true
+   },
+   {
+    "text": "Users must support the systems themselves",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Linux originally only ran on:",
+  "hint": [],
+  "raw_q": "Linux originally only ran on:",
+  "options": [
+   {
+    "text": "Xerox copy machines",
+    "correct": false
+   },
+   {
+    "text": "Specialized processor chips",
+    "correct": false
+   },
+   {
+    "text": "Intel 386 PCs",
+    "correct": true
+   },
+   {
+    "text": "Raspberry Pi computers",
+    "correct": false
+   },
+   {
+    "text": "Macintosh",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Bundling utilities, management tools, and application software with a Linux kernel is called a:",
+  "hint": [],
+  "raw_q": "Bundling utilities, management tools, and application software with a Linux kernel is called a:",
+  "options": [
+   {
+    "text": "A trademark",
+    "correct": false
+   },
+   {
+    "text": "A distribution of Linux",
+    "correct": true
+   },
+   {
+    "text": "A type of hardware",
+    "correct": false
+   },
+   {
+    "text": "A text editor",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "A software release cycle describes:",
+  "hint": [],
+  "raw_q": "A software release cycle describes:",
+  "options": [
+   {
+    "text": "How often security fixes are implemented",
+    "correct": false
+   },
+   {
+    "text": "How often the software’s memory is released back to the operating system",
+    "correct": false
+   },
+   {
+    "text": "How often upgrades come out for software",
+    "correct": true
+   },
+   {
+    "text": "How often the computer must be rebooted",
+    "correct": false
+   },
+   {
+    "text": "How often the computer must be upgraded to support new software",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Apple’s OS X is:",
+  "hint": [
+   "(choose three)"
+  ],
+  "raw_q": "Apple’s OS X is:",
+  "options": [
+   {
+    "text": "A fully certified UNIX distribution",
+    "correct": true
+   },
+   {
+    "text": "Tightly integrated with Apple hardware",
+    "correct": true
+   },
+   {
+    "text": "Partially based on code from the FreeBSD project",
+    "correct": true
+   },
+   {
+    "text": "Primarily used to manage network services",
+    "correct": false
+   },
+   {
+    "text": "Derived from Linux",
+    "correct": false
+   },
+   {
+    "text": "Able to natively run Windows binaries",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Microsoft Windows:",
+  "hint": [
+   "(choose three)"
+  ],
+  "raw_q": "Microsoft Windows:",
+  "options": [
+   {
+    "text": "Is generally backwards compatible with previous versions",
+    "correct": true
+   },
+   {
+    "text": "Offers both desktop and server products",
+    "correct": true
+   },
+   {
+    "text": "Has a Linux compatibility mode",
+    "correct": false
+   },
+   {
+    "text": "Has a short maintenance cycle",
+    "correct": false
+   },
+   {
+    "text": "Has a scripting environment called PowerShell",
+    "correct": true
+   },
+   {
+    "text": "Has a new desktop version every year.",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "An interpreted programming language:",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "An interpreted programming language:",
+  "options": [
+   {
+    "text": "Requires a compilation step but no linking step",
+    "correct": false
+   },
+   {
+    "text": "Is converted into machine specific instructions as the program runs",
+    "correct": true
+   },
+   {
+    "text": "Tends to offer more features than compiled languages",
+    "correct": true
+   },
+   {
+    "text": "Requires a linking step but no compilation step",
+    "correct": false
+   },
+   {
+    "text": "Takes fewer resources to run than a compiled language",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The two main families of Linux shells are:",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "The two main families of Linux shells are:",
+  "options": [
+   {
+    "text": "Bourne Shell",
+    "correct": true
+   },
+   {
+    "text": "Python Shell",
+    "correct": false
+   },
+   {
+    "text": "Korn shell",
+    "correct": false
+   },
+   {
+    "text": "Emacs",
+    "correct": false
+   },
+   {
+    "text": "C Shell",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "In virtualization, what are the host and guest?",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "In virtualization, what are the host and guest?",
+  "options": [
+   {
+    "text": "The host is the machine that runs the virtual machines",
+    "correct": true
+   },
+   {
+    "text": "The guest is the machine that runs the virtual machines",
+    "correct": false
+   },
+   {
+    "text": "The terms can be used interchangeably",
+    "correct": false
+   },
+   {
+    "text": "A host is a virtual machine",
+    "correct": false
+   },
+   {
+    "text": "A guest is a virtual machine",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Cloud computing is:",
+  "hint": [],
+  "raw_q": "Cloud computing is:",
+  "options": [
+   {
+    "text": "Requires fewer resources because systems are shared among many users",
+    "correct": false
+   },
+   {
+    "text": "Allows users in different geographical regions to work together in real time",
+    "correct": false
+   },
+   {
+    "text": "All are correct",
+    "correct": true
+   },
+   {
+    "text": "Is made possible by faster internet speeds",
+    "correct": false
+   },
+   {
+    "text": "Is useful for both business and home users",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which of the following are properties of a strong password?",
+  "hint": [
+   "(choose three)"
+  ],
+  "raw_q": "Which of the following are properties of a strong password?",
+  "options": [
+   {
+    "text": "Based on easy to remember items like birthdays",
+    "correct": false
+   },
+   {
+    "text": "Long so that it can be reused on multiple sites",
+    "correct": false
+   },
+   {
+    "text": "Includes symbols",
+    "correct": true
+   },
+   {
+    "text": "At least 10 characters long",
+    "correct": true
+   },
+   {
+    "text": "A mix of upper and lower case",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "A license where you don’t have access to the source code is called:",
+  "hint": [],
+  "raw_q": "A license where you don’t have access to the source code is called:",
+  "options": [
+   {
+    "text": "Sourceless",
+    "correct": false
+   },
+   {
+    "text": "Impaired source",
+    "correct": false
+   },
+   {
+    "text": "Open source",
+    "correct": false
+   },
+   {
+    "text": "Closed source",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "A copyleft provision in a software license means:",
+  "hint": [],
+  "raw_q": "A copyleft provision in a software license means:",
+  "options": [
+   {
+    "text": "You must provide support for your modifications",
+    "correct": false
+   },
+   {
+    "text": "You may not link against third party closed source software",
+    "correct": false
+   },
+   {
+    "text": "If you redistribute the software, you must distribute the source to any changes you make",
+    "correct": true
+   },
+   {
+    "text": "You must provide free copies of the software if you use it",
+    "correct": false
+   },
+   {
+    "text": "You give up your copyright to the software",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The Free Software Foundation believes that:",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "The Free Software Foundation believes that:",
+  "options": [
+   {
+    "text": "Software should be free to modify",
+    "correct": true
+   },
+   {
+    "text": "People should write software with no expectation of making money",
+    "correct": false
+   },
+   {
+    "text": "Software should not have copyright",
+    "correct": false
+   },
+   {
+    "text": "Software should be free to share",
+    "correct": true
+   },
+   {
+    "text": "No money should ever change hands",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "What does it mean when a work is placed in the public domain?",
+  "hint": [],
+  "raw_q": "What does it mean when a work is placed in the public domain?",
+  "options": [
+   {
+    "text": "The work was done by a government agency",
+    "correct": false
+   },
+   {
+    "text": "You may not use the work for commercial purposes",
+    "correct": false
+   },
+   {
+    "text": "The author has died",
+    "correct": false
+   },
+   {
+    "text": "The author has relinquished the copyright on the work",
+    "correct": true
+   },
+   {
+    "text": "You must redistribute changes to the software",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The semicolon (;) can be used to separate multiple commands to be executed in order.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "The semicolon (<code class=\"console\">;</code>) can be used to separate multiple commands to be executed in order.",
+  "options": [
+   {
+    "text": "True",
+    "correct": true
+   },
+   {
+    "text": "False",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "To be able to output messages to the screen, use the _______ command:",
+  "hint": [],
+  "raw_q": "To be able to output messages to the screen, use the _______ command:",
+  "options": [
+   {
+    "text": "print",
+    "correct": false
+   },
+   {
+    "text": "echo",
+    "correct": true
+   },
+   {
+    "text": "display",
+    "correct": false
+   },
+   {
+    "text": "type",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The _______ command will print a list of the commands that you’ve previously executed.",
+  "hint": [],
+  "raw_q": "The _______ command will print a list of the commands that you’ve previously executed.",
+  "options": [
+   {
+    "text": "list",
+    "correct": false
+   },
+   {
+    "text": "eval",
+    "correct": false
+   },
+   {
+    "text": "exec",
+    "correct": false
+   },
+   {
+    "text": "history",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "HOME is an example of _________.",
+  "hint": [],
+  "raw_q": "HOME is an example of _________.",
+  "options": [
+   {
+    "text": "A path variable",
+    "correct": false
+   },
+   {
+    "text": "A local variable",
+    "correct": false
+   },
+   {
+    "text": "An environment variable",
+    "correct": true
+   },
+   {
+    "text": "An alias",
+    "correct": false
+   },
+   {
+    "text": "An internal command",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The directory where additional documentation for software packages most likely can be found is:",
+  "hint": [],
+  "raw_q": "The directory where additional documentation for software packages most likely can be found is:",
+  "options": [
+   {
+    "text": "/var/share/doc",
+    "correct": false
+   },
+   {
+    "text": "/var/lib/doc",
+    "correct": false
+   },
+   {
+    "text": "/usr/software/doc",
+    "correct": false
+   },
+   {
+    "text": "/usr/share/doc",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "To start searching a man page, the first key you press is:",
+  "hint": [],
+  "raw_q": "To start searching a man page, the first key you press is:",
+  "options": [
+   {
+    "text": "/",
+    "correct": true
+   },
+   {
+    "text": "f",
+    "correct": false
+   },
+   {
+    "text": "s",
+    "correct": false
+   },
+   {
+    "text": "!",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "To get help on using the info command, execute:",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "To get help on using the <code>info</code> command, execute:",
+  "options": [
+   {
+    "text": "man info",
+    "correct": true
+   },
+   {
+    "text": "info info",
+    "correct": true
+   },
+   {
+    "text": "help info",
+    "correct": false
+   },
+   {
+    "text": "info -q",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The _____ command can be used to find any file, not just commands or man pages.",
+  "hint": [],
+  "raw_q": "The _____ command can be used to find any file, not just commands or man pages.",
+  "options": [
+   {
+    "text": "whatis",
+    "correct": false
+   },
+   {
+    "text": "locate",
+    "correct": true
+   },
+   {
+    "text": "whereis",
+    "correct": false
+   },
+   {
+    "text": "apropos",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Hidden files are files that begin with what character?",
+  "hint": [],
+  "raw_q": "Hidden files are files that begin with what character?",
+  "options": [
+   {
+    "text": "A period (.)",
+    "correct": true
+   },
+   {
+    "text": "An asterisk (*)",
+    "correct": false
+   },
+   {
+    "text": "A plus (+)",
+    "correct": false
+   },
+   {
+    "text": "A dash (-)",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The top-level directory on a Linux system is represented as:",
+  "hint": [],
+  "raw_q": "The top-level directory on a Linux system is represented as:",
+  "options": [
+   {
+    "text": "/",
+    "correct": true
+   },
+   {
+    "text": "/home",
+    "correct": false
+   },
+   {
+    "text": "/root",
+    "correct": false
+   },
+   {
+    "text": "C:",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The ls command without options or arguments…",
+  "hint": [],
+  "raw_q": "The <code>ls</code> command without options or arguments…",
+  "options": [
+   {
+    "text": "…prompts for a directory to list.",
+    "correct": false
+   },
+   {
+    "text": "…lists the contents of the current directory.",
+    "correct": true
+   },
+   {
+    "text": "…lists the contents of a user’s home directory.",
+    "correct": false
+   },
+   {
+    "text": "…generates an error as this command requires arguments.",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The command ls -S will sort files:",
+  "hint": [],
+  "raw_q": "The command <code>ls -S</code> will sort files:",
+  "options": [
+   {
+    "text": "By size, smallest to largest",
+    "correct": false
+   },
+   {
+    "text": "By modification date, newest to oldest",
+    "correct": false
+   },
+   {
+    "text": "By number of symlinks, largest to smallest",
+    "correct": false
+   },
+   {
+    "text": "By size, largest to smallest",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "When using the cp command, you must provide both a source and a destination.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "When using the <code>cp</code> command, you must provide both a source and a destination.",
+  "options": [
+   {
+    "text": "True",
+    "correct": true
+   },
+   {
+    "text": "False",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which option can be used with the rm command to prompt before deleting?",
+  "hint": [],
+  "raw_q": "Which option can be used with the <code>rm</code> command to prompt before deleting?",
+  "options": [
+   {
+    "text": "l",
+    "correct": false
+   },
+   {
+    "text": "A",
+    "correct": false
+   },
+   {
+    "text": "-P",
+    "correct": false
+   },
+   {
+    "text": "-i",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which command would list files that do not begin with a “T” or a “W”?",
+  "hint": [],
+  "raw_q": "Which command would list files that do not begin with a “T” or a “W”?",
+  "options": [
+   {
+    "text": "echo /etc/[!TW]*",
+    "correct": true
+   },
+   {
+    "text": "echo /etc/[*TW]!",
+    "correct": false
+   },
+   {
+    "text": "echo /etc/!TW",
+    "correct": false
+   },
+   {
+    "text": "echo /etc/*[TW!]",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "In general, for which of the following would you want to use lossless compression?",
+  "hint": [],
+  "raw_q": "In general, for which of the following would you want to use lossless compression?",
+  "options": [
+   {
+    "text": "A JPEG image",
+    "correct": false
+   },
+   {
+    "text": "A log file",
+    "correct": true
+   },
+   {
+    "text": "An encrypted email",
+    "correct": false
+   },
+   {
+    "text": "A movie",
+    "correct": false
+   },
+   {
+    "text": "An mp3 audio file",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "You type gzip myfile.tar. What happens?",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "You type <code>gzip myfile.tar</code>. What happens?",
+  "options": [
+   {
+    "text": "An error; you forgot to specify the file with -f",
+    "correct": false
+   },
+   {
+    "text": "myfile.tar is unarchived into the current directory",
+    "correct": false
+   },
+   {
+    "text": "myfile.tar is removed",
+    "correct": true
+   },
+   {
+    "text": "An error; you forgot to pass the name of the output file",
+    "correct": false
+   },
+   {
+    "text": "myfile.tar.gz holds a compressed version of myfile.tar",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which command will show what is inside the compressed tarball with a name of foo.tar.gz?",
+  "hint": [],
+  "raw_q": "Which command will show what is inside the compressed tarball with a name of <code class=\"console\">foo.tar.gz</code>?",
+  "options": [
+   {
+    "text": "tar –tf foo.tar.gz",
+    "correct": false
+   },
+   {
+    "text": "tar –tzf foo.tar.gz",
+    "correct": true
+   },
+   {
+    "text": "tar –xf foo.tar.gz",
+    "correct": false
+   },
+   {
+    "text": "tar –lf foo.tar.gz",
+    "correct": false
+   },
+   {
+    "text": "tar –tjf foo.tar.gz",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "By default, the zip command replaces uncompressed files with compressed files.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "By default, the <code>zip</code> command replaces uncompressed files with compressed files.",
+  "options": [
+   {
+    "text": "True",
+    "correct": false
+   },
+   {
+    "text": "False",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Error messages generated by commands are sent where by default?",
+  "hint": [],
+  "raw_q": "Error messages generated by commands are sent where by default?",
+  "options": [
+   {
+    "text": "STDIN",
+    "correct": false
+   },
+   {
+    "text": "Log files",
+    "correct": false
+   },
+   {
+    "text": "STDOUT",
+    "correct": false
+   },
+   {
+    "text": "STDERR",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands will display only lines that begin with test?",
+  "hint": [],
+  "raw_q": "Which of the following commands will display only lines that begin with <code class=\"console\">test</code>?",
+  "options": [
+   {
+    "text": "grep *test file.txt",
+    "correct": false
+   },
+   {
+    "text": "grep &test file.txt",
+    "correct": false
+   },
+   {
+    "text": "grep $test* file.txt",
+    "correct": false
+   },
+   {
+    "text": "grep ^test file.txt",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands will display lines that contain either start or end?",
+  "hint": [],
+  "raw_q": "Which of the following commands will display lines that contain either start or end?",
+  "options": [
+   {
+    "text": "egrep ‘start|end’ file.txt",
+    "correct": true
+   },
+   {
+    "text": "egrep start end file.txt",
+    "correct": false
+   },
+   {
+    "text": "egrep start&end file.txt",
+    "correct": false
+   },
+   {
+    "text": "egrep (start|end) file.txt",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "A file begins with #!/bin/csh. This means:",
+  "hint": [],
+  "raw_q": "A file begins with <code class=\"console\">#!/bin/csh</code>. This means:",
+  "options": [
+   {
+    "text": "This is a Perl script",
+    "correct": false
+   },
+   {
+    "text": "The operator should not be using /bin/csh",
+    "correct": false
+   },
+   {
+    "text": "C Shell compatibility mode is enabled",
+    "correct": false
+   },
+   {
+    "text": "Running the script will invoke /bin/csh to interpret the rest of the file",
+    "correct": true
+   },
+   {
+    "text": "Nothing, this is a comment",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Most of nano’s commands take the form of:",
+  "hint": [],
+  "raw_q": "Most of <code>nano</code>’s commands take the form of:",
+  "options": [
+   {
+    "text": "Alt and another character",
+    "correct": false
+   },
+   {
+    "text": "Escape followed by another character",
+    "correct": false
+   },
+   {
+    "text": "The F1 through F12 function keys",
+    "correct": false
+   },
+   {
+    "text": "Mouse clicks",
+    "correct": false
+   },
+   {
+    "text": "Control and another character",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "The if command looks for what exit code to consider a condition to be true?",
+  "hint": [],
+  "raw_q": "The <code>if</code> command looks for what exit code to consider a condition to be true?",
+  "options": [
+   {
+    "text": "255",
+    "correct": false
+   },
+   {
+    "text": "0",
+    "correct": true
+   },
+   {
+    "text": "2",
+    "correct": false
+   },
+   {
+    "text": "1",
+    "correct": false
+   },
+   {
+    "text": "10",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The number of users logged in is in a variable called USERS. How would you test to see if 5 users are logged in?",
+  "hint": [],
+  "raw_q": "The number of users logged in is in a variable called USERS. How would you test to see if 5 users are logged in?",
+  "options": [
+   {
+    "text": "test $USERS –eq 5",
+    "correct": true
+   },
+   {
+    "text": "test $USERS,5",
+    "correct": false
+   },
+   {
+    "text": "test –f USERS=5",
+    "correct": false
+   },
+   {
+    "text": "test $USERS = 5",
+    "correct": false
+   },
+   {
+    "text": "test $USERS –a 5",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which of the following are valid partitioning types?",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "Which of the following are valid partitioning types?",
+  "options": [
+   {
+    "text": "PC",
+    "correct": false
+   },
+   {
+    "text": "MBR",
+    "correct": true
+   },
+   {
+    "text": "GPT",
+    "correct": true
+   },
+   {
+    "text": "BIOS",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Software that allows hardware devices to communicate with the installed operating system is called?",
+  "hint": [],
+  "raw_q": "Software that allows hardware devices to communicate with the installed operating system is called?",
+  "options": [
+   {
+    "text": "Drivers",
+    "correct": true
+   },
+   {
+    "text": "Instructions",
+    "correct": false
+   },
+   {
+    "text": "Packages",
+    "correct": false
+   },
+   {
+    "text": "Programs",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands will check hard disk GPT partitions?",
+  "hint": [
+   "(choose three)"
+  ],
+  "raw_q": "Which of the following commands will check hard disk GPT partitions?",
+  "options": [
+   {
+    "text": "sfdisk",
+    "correct": false
+   },
+   {
+    "text": "sgdisk",
+    "correct": true
+   },
+   {
+    "text": "gdisk",
+    "correct": true
+   },
+   {
+    "text": "cgdisk",
+    "correct": true
+   },
+   {
+    "text": "gfdisk",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The process (ps) command shows only processes running in the current shell by default.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "The process (<code>ps</code>) command shows only processes running in the current shell by default.",
+  "options": [
+   {
+    "text": "True",
+    "correct": true
+   },
+   {
+    "text": "False",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The free command outputs statistics about:",
+  "hint": [],
+  "raw_q": "The <code>free</code> command outputs statistics about:",
+  "options": [
+   {
+    "text": "Memory usage",
+    "correct": true
+   },
+   {
+    "text": "Disk usage",
+    "correct": false
+   },
+   {
+    "text": "Software usage",
+    "correct": false
+   },
+   {
+    "text": "CPU usage",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which file contains the information passed to the kernel at boot time?",
+  "hint": [],
+  "raw_q": "Which file contains the information passed to the kernel at boot time?",
+  "options": [
+   {
+    "text": "/proc/kernel",
+    "correct": false
+   },
+   {
+    "text": "/proc/kopts",
+    "correct": false
+   },
+   {
+    "text": "/proc/kargs",
+    "correct": false
+   },
+   {
+    "text": "/proc/cmdline",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "To make changes permanent for kernel parameter files found under /proc/sys, the following file can have entries added to it:",
+  "hint": [],
+  "raw_q": "To make changes permanent for kernel parameter files found under <code class=\"console\">/proc/sys</code>, the following file can have entries added to it:",
+  "options": [
+   {
+    "text": "/etc/sysinfo.conf",
+    "correct": false
+   },
+   {
+    "text": "/etc/sysctl.conf",
+    "correct": true
+   },
+   {
+    "text": "/etc/procctl.conf",
+    "correct": false
+   },
+   {
+    "text": "/etc/procsys.conf",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands will display the IP address on a Linux system?",
+  "hint": [],
+  "raw_q": "Which of the following commands will display the IP address on a Linux system?",
+  "options": [
+   {
+    "text": "ifconfig",
+    "correct": true
+   },
+   {
+    "text": "route",
+    "correct": false
+   },
+   {
+    "text": "ipconfig",
+    "correct": false
+   },
+   {
+    "text": "dig",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The RSA key fingerprint allows the dig command to connect to remote systems.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "The RSA key fingerprint allows the <code>dig</code> command to connect to remote systems.",
+  "options": [
+   {
+    "text": "True",
+    "correct": false
+   },
+   {
+    "text": "False",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "When issuing the service network restart command, which of the following occurs?",
+  "hint": [],
+  "raw_q": "When issuing the <code>service network restart</code> command, which of the following occurs?",
+  "options": [
+   {
+    "text": "…takes down all network interfaces, re-reads all related configuration files and then the networking for the system is restarted.",
+    "correct": true
+   },
+   {
+    "text": "…the networking for the system is stopped and then started back up.",
+    "correct": false
+   },
+   {
+    "text": "…brings up all network interfaces, re-reads all related configuration files and then the networking for the system is restarted.",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands can be used to display socket statistics, and supports all major packet and socket types?",
+  "hint": [],
+  "raw_q": "Which of the following commands can be used to display socket statistics, and supports all major packet and socket types?",
+  "options": [
+   {
+    "text": "route",
+    "correct": false
+   },
+   {
+    "text": "ss",
+    "correct": true
+   },
+   {
+    "text": "ifconfig",
+    "correct": false
+   },
+   {
+    "text": "top",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands will display the groups that the user bob belongs to?",
+  "hint": [],
+  "raw_q": "Which of the following commands will display the groups that the user bob belongs to?",
+  "options": [
+   {
+    "text": "group bob",
+    "correct": false
+   },
+   {
+    "text": "id bob",
+    "correct": true
+   },
+   {
+    "text": "all bob",
+    "correct": false
+   },
+   {
+    "text": "groups -a",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Traditional UNIX systems allowed users to belong to how many groups?",
+  "hint": [],
+  "raw_q": "Traditional UNIX systems allowed users to belong to how many groups?",
+  "options": [
+   {
+    "text": "65,000",
+    "correct": false
+   },
+   {
+    "text": "10,000",
+    "correct": false
+   },
+   {
+    "text": "1",
+    "correct": false
+   },
+   {
+    "text": "256",
+    "correct": false
+   },
+   {
+    "text": "16",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "A value of 0 in the “minimum” password aging field means the user cannot change their password.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "A value of 0 in the “minimum” password aging field means the user <var>cannot</var> change their password.",
+  "options": [
+   {
+    "text": "True",
+    "correct": false
+   },
+   {
+    "text": "False",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Sudo privileges allow users to execute commands as another user.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "Sudo privileges allow users to execute commands as another user.",
+  "options": [
+   {
+    "text": "True",
+    "correct": true
+   },
+   {
+    "text": "False",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "The first line of this command displays how long the system has been running since being rebooted.",
+  "hint": [],
+  "raw_q": "The first line of this command displays how long the system has been running since being rebooted.",
+  "options": [
+   {
+    "text": "id",
+    "correct": false
+   },
+   {
+    "text": "getent",
+    "correct": false
+   },
+   {
+    "text": "who",
+    "correct": false
+   },
+   {
+    "text": "w",
+    "correct": true
+   },
+   {
+    "text": "su",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which option for the usermod command can be used to specify a user’s group ID (either primary or secondary)?",
+  "hint": [
+   "(choose two)"
+  ],
+  "raw_q": "Which option for the <code>usermod</code> command can be used to specify a user’s group ID (either primary or secondary)?",
+  "options": [
+   {
+    "text": "-g",
+    "correct": true
+   },
+   {
+    "text": "-S",
+    "correct": false
+   },
+   {
+    "text": "-s",
+    "correct": false
+   },
+   {
+    "text": "-G",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "The groupmod command can be used to add users to a group.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "The <code class=\"console\">groupmod</code> command can be used to add users to a group.",
+  "options": [
+   {
+    "text": "True",
+    "correct": false
+   },
+   {
+    "text": "False",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which of the following files contains user IDs?",
+  "hint": [],
+  "raw_q": "Which of the following files contains user IDs?",
+  "options": [
+   {
+    "text": "/etc/passwd",
+    "correct": true
+   },
+   {
+    "text": "/etc/shadow",
+    "correct": false
+   },
+   {
+    "text": "/etc/group",
+    "correct": false
+   },
+   {
+    "text": "/etc/usr",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands, run as root, will prevent the user bob from logging in?",
+  "hint": [],
+  "raw_q": "Which of the following commands, run as root, will prevent the user <code class=\"console\">bob</code> from logging in?",
+  "options": [
+   {
+    "text": "usermod -L bob",
+    "correct": true
+   },
+   {
+    "text": "usermod -D bob",
+    "correct": false
+   },
+   {
+    "text": "usermod -d bob",
+    "correct": false
+   },
+   {
+    "text": "usermod -l bob",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "What directory contains a user’s home directory?",
+  "hint": [],
+  "raw_q": "What directory contains a user’s home directory?",
+  "options": [
+   {
+    "text": "/rootfs",
+    "correct": false
+   },
+   {
+    "text": "/user",
+    "correct": false
+   },
+   {
+    "text": "/",
+    "correct": false
+   },
+   {
+    "text": "/home",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "GIDs under 500 (or 1000) are usually reserved for what kind of groups?",
+  "hint": [],
+  "raw_q": "GIDs under 500 (or 1000) are usually reserved for what kind of groups?",
+  "options": [
+   {
+    "text": "Are not used for groups, but for user accounts",
+    "correct": false
+   },
+   {
+    "text": "Administrators",
+    "correct": false
+   },
+   {
+    "text": "User private groups (UPG)",
+    "correct": false
+   },
+   {
+    "text": "System use",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "A user cannot delete a file if they do not own it.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "A user cannot delete a file if they do not own it.",
+  "options": [
+   {
+    "text": "True",
+    "correct": false
+   },
+   {
+    "text": "False",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "The chown command permits changing group ownership done by root only.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "The <code>chown</code> command permits changing group ownership done by root only.",
+  "options": [
+   {
+    "text": "True",
+    "correct": false
+   },
+   {
+    "text": "False",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands will list hidden files as well as their ownership?",
+  "hint": [],
+  "raw_q": "Which of the following commands will list hidden files as well as their ownership?",
+  "options": [
+   {
+    "text": "ls -a",
+    "correct": false
+   },
+   {
+    "text": "ls -z",
+    "correct": false
+   },
+   {
+    "text": "ls -l",
+    "correct": false
+   },
+   {
+    "text": "ls -la",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands will set setuid for /usr/bin/program?",
+  "hint": [],
+  "raw_q": "Which of the following commands will set setuid for <code class=\"console\">/usr/bin/</code>program?",
+  "options": [
+   {
+    "text": "chmod 1755 /usr/bin/program",
+    "correct": false
+   },
+   {
+    "text": "chmod 4755 /usr/bin/program",
+    "correct": true
+   },
+   {
+    "text": "chmod 2755 /usr/bin/program",
+    "correct": false
+   },
+   {
+    "text": "None of the above",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Setting setgid on a directory…",
+  "hint": [],
+  "raw_q": "Setting setgid on a directory…",
+  "options": [
+   {
+    "text": "…will allow scripts in the directory to be executed as the group owner of the directory.",
+    "correct": false
+   },
+   {
+    "text": "…will set the group owner of all files created in the directory to the group owner of the directory.",
+    "correct": true
+   },
+   {
+    "text": "…is not allowed by the system.",
+    "correct": false
+   },
+   {
+    "text": "…does nothing.",
+    "correct": false
+   }
+  ]
+ },
+ {
+  "q": "Deleting a source file will break an associated hard link.",
+  "hint": [
+   "True or False?"
+  ],
+  "raw_q": "Deleting a source file will break an associated hard link.",
+  "options": [
+   {
+    "text": "True",
+    "correct": false
+   },
+   {
+    "text": "False",
+    "correct": true
+   }
+  ]
+ },
+ {
+  "q": "Which of the following commands would create a hard link, link to file?",
+  "hint": [],
+  "raw_q": "Which of the following commands would create a hard link, <var>link</var> to <var>file</var>?",
+  "options": [
+   {
+    "text": "ln file link",
+    "correct": true
+   },
+   {
+    "text": "ln -s link file",
+    "correct": false
+   },
+   {
+    "text": "ln link file",
+    "correct": false
+   },
+   {
+    "text": "ln -s file link",
+    "correct": false
+   }
+  ]
+ }
+]
