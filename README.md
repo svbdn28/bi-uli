@@ -89,9 +89,7 @@ kľúča, lebo za ňu dostaneš body, a pri týchto otázkach ťa na rozdiel upo
 Claude Code a daj mu napríklad tento prompt:
 
 ```text
-Prepíš túto Android appku do natívnej iOS appky (SwiftUI, iOS 17+). Otázky ber z content/questions.json bez zmien.
-Učenie (Leitnerove boxy, kolá, skúška nanečisto, odhad a šanca prejsť) prenes 1:1 z app/src/main/java/dev/hamper/uli/engine
-aj s testami. Dizajn, texty po slovensky a správanie obrazoviek drž podľa Android verzie (docs/media). Nech funguje offline.
+Preportuj túto appku na iPhone.
 ```
 
 Keď ti port pôjde, pošli pull request alebo link a pridám ho sem.
