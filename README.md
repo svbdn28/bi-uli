@@ -11,6 +11,9 @@
 70 otázok z procvičovacieho testu. Ostrý test je 50 náhodných otázok z nich. Pri každej otázke sa dozvieš, prečo je
 odpoveď správna a prečo tá tvoja nebola. Kolo má 10 otázok, takže ho stihneš cestou v metre.
 
+Celá appka vznikla z jedného promptu v [Claude Code](https://claude.com/claude-code). Máš iPhone?
+[Takto si ju prenesieš](#časté-otázky).
+
 ## Inštalácia (2 minúty)
 
 1. V mobile otvor [**ULI.apk**](https://github.com/teoobarca/bi-uli/releases/latest/download/ULI.apk) a stiahni ho.
@@ -81,7 +84,17 @@ kľúča, lebo za ňu dostaneš body, a pri týchto otázkach ťa na rozdiel upo
 
 ## Časté otázky
 
-**Je aj pre iPhone?** Nie, len Android 13 a novší.
+**Je aj pre iPhone?** Zatiaľ nie, len Android 13 a novší. Celá appka však vznikla z jedného promptu v
+[Claude Code](https://claude.com/claude-code), takže port na iPhone si spravíš rovnako. Naklonuj repo, spusti v ňom
+Claude Code a daj mu napríklad tento prompt:
+
+```text
+Prepíš túto Android appku do natívnej iOS appky (SwiftUI, iOS 17+). Otázky ber z content/questions.json bez zmien.
+Učenie (Leitnerove boxy, kolá, skúška nanečisto, odhad a šanca prejsť) prenes 1:1 z app/src/main/java/dev/hamper/uli/engine
+aj s testami. Dizajn, texty po slovensky a správanie obrazoviek drž podľa Android verzie (docs/media). Nech funguje offline.
+```
+
+Keď ti port pôjde, pošli pull request alebo link a pridám ho sem.
 
 **Potrebuje internet?** Nie. Appka nemá ani povolenie na internet, tvoj postup ostáva len v mobile.
 
