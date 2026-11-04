@@ -79,6 +79,11 @@ object Shots {
                 NOW, Screen.RoundEnd,
                 roundSummary = RoundSummary(RoundKind.Smart, roundIds, score = 8, total = 10, mistakes = listOf(67, 33), newlyMastered = 3),
             )
+            // A first clean round: nothing is mastered yet, so the card shows the cards that moved up.
+            "round-end-first" -> vm.installShot(
+                ProgressData(), NOW, Screen.RoundEnd,
+                roundSummary = RoundSummary(RoundKind.Smart, (1..10).toList(), score = 10, total = 10, mistakes = emptyList(), newlyMastered = 0, climbed = 10),
+            )
             "exam-result" -> {
                 val rnd = Random(3)
                 var e = Exam.start(vm.ids, NOW - (23 * 60 + 41) * 1000L, rnd)

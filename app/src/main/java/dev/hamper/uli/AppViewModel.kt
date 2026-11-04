@@ -79,6 +79,8 @@ data class RoundSummary(
     val total: Int,
     val mistakes: List<Int>,
     val newlyMastered: Int,
+    /** Cards whose box went up this round, mastered or not: a first clean round shows this instead of "+0". */
+    val climbed: Int = 0,
 )
 
 data class ExamSummary(val result: ExamResult, val exam: Exam) {
@@ -336,7 +338,8 @@ class AppViewModel(app: Application, private val handle: SavedStateHandle) : And
         val round = s.round.next()
         if (round.isFinished) {
             val mastered = round.ids.count { (roundStart[it] ?: 0) < Srs.MASTERED_BOX && progress.card(it).isMastered }
-            roundSummary = RoundSummary(s.kind, round.ids, round.score, round.total, round.mistakes, mastered)
+            val climbed = round.ids.distinct().count { progress.card(it).box > (roundStart[it] ?: 0) }
+            roundSummary = RoundSummary(s.kind, round.ids, round.score, round.total, round.mistakes, mastered, climbed)
             quiz = null
             roundStart = emptyMap()
             go(Screen.RoundEnd)

@@ -102,13 +102,25 @@ fun RoundEndScreen(vm: AppViewModel) {
                 // One quiet card with the two numbers that moved, instead of a row of colored tiles.
                 Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.height(IntrinsicSize.Min).padding(vertical = 16.dp)) {
-                        Stat(
-                            value = "+${s.newlyMastered}",
-                            label = "novo zvládnuté",
-                            detail = "spolu $mastered zo ${vm.ids.size}",
-                            color = if (s.newlyMastered > 0) c.right else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
+                        // Mastery needs 3 right answers spread over time, so a first clean round masters nothing yet:
+                        // then show how many cards moved up instead of a discouraging "+0".
+                        if (s.newlyMastered > 0 || s.climbed == 0) {
+                            Stat(
+                                value = "+${s.newlyMastered}",
+                                label = "novo zvládnuté",
+                                detail = "spolu $mastered zo ${vm.ids.size}",
+                                color = if (s.newlyMastered > 0) c.right else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                        } else {
+                            Stat(
+                                value = "+${s.climbed}",
+                                label = "o krok bližšie",
+                                detail = "zvládnutá po 3. správnej",
+                                color = c.right,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                         Box(Modifier.fillMaxHeight().padding(vertical = 4.dp).width(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
                         Stat(
                             value = "$readiness %",
