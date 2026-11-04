@@ -1,5 +1,5 @@
-import json, collections, re
-d = json.load(open("/Users/rafael/Programming/uli/content/questions.json"))
+import json, collections, re, pathlib
+d = json.load(open(pathlib.Path(__file__).with_name("questions.json"), encoding="utf-8"))
 assert len(d) == 70
 TOP = {"intro","opensource","cli","help","files","archives","pipes","scripts","hardware","network","users","perms","links"}
 for i, q in enumerate(d, 1):

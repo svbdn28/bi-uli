@@ -32,7 +32,7 @@ demo() { "${ADB[@]}" shell am broadcast -a com.android.systemui.demo -e command 
 demo enter
 demo clock -e hhmm 1200
 demo battery -e level 100 -e plugged false
-demo network -e wifi show -e level 4 -e mobile hide
+demo network -e wifi show -e level 4 -e fully true -e mobile hide
 demo notifications -e visible false
 
 "${ADB[@]}" logcat -c
