@@ -8,7 +8,7 @@
 </p>
 
 **ULI** je Android appka na precvičenie zápočtového testu **BI-ULI (Úvod do Linuxu)** na FIT ČVUT. Obsahuje všetkých
-70 otázok z procvičovacieho testu. Ostrý test je 50 náhodných otázok z nich. Pri každej otázke sa dozvieš, prečo je
+70 otázok z procvičovacieho testu, ktorý študenti zdieľajú na fit-wiki. Pri každej otázke sa dozvieš, prečo je
 odpoveď správna a prečo tá tvoja nebola. Kolo má 10 otázok, takže ho stihneš cestou v metre.
 
 Celá appka vznikla z jedného promptu v [Claude Code](https://claude.com/claude-code) a [T3 Code](https://t3.codes). Máš iPhone?
@@ -47,14 +47,20 @@ Novšiu verziu nainštaluješ rovnako, cez tú starú. Tvoj postup ostane.
 
 | | |
 |---|---|
-| Otázky | 50 náhodných z týchto 70, po anglicky |
+| Otázky | 50 náhodných zo všetkých kapitol kurzu, po anglicky |
 | Body | 1,6 b za otázku, spolu 80 b |
 | Na zápočet | **aspoň 64 b** (80 %), t. j. najviac 10 chýb |
 | Pomôcky | žiadne, ani papier a pero |
 | Kde | počítačová učebňa FIT, termíny v KOS-e, so sebou preukaz |
 
 Zdroj: [fit-wiki BI-ULI](https://fit-wiki.cz/%C5%A1kola/p%C5%99edm%C4%9Bty/bi-uli). Podľa nej ostrý test vyzerá presne
-ako procvičovací test, len z neho vyberie 50 otázok.
+ako procvičovací test, len má 50 otázok namiesto 70.
+
+> **Pozor:** nie je overené, že na ostrom teste budú len týchto 70 otázok. Test berie otázky zo všetkých kapitol
+> kurzu Linux Essentials a ich banka je väčšia: zo ~200 otázok, ktoré študenti zozbierali na fit-wiki
+> ([vypracované testy](https://fit-wiki.cz/%C5%A1kola/p%C5%99edm%C4%9Bty/bi-uli/materialy)), je v týchto 70 len 23.
+> Appka ťa naučí témy, na ktoré sa test pýta, ale „Odhad na skúške“ a „Šanca prejsť“ počítajú len s týmito 70
+> otázkami.
 
 ## Pozor na týchto 9 otázok
 
