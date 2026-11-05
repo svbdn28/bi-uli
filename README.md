@@ -47,20 +47,25 @@ Novšiu verziu nainštaluješ rovnako, cez tú starú. Tvoj postup ostane.
 
 | | |
 |---|---|
-| Otázky | 50 náhodných zo všetkých kapitol kurzu, po anglicky |
+| Čo to je | test **Final Comprehensive Exam (Modules 2-18)** v NetAcad kurze „ULI 2026“, píše sa v učebni FIT |
+| Otázky | 50 otázok po anglicky, náhodne zo všetkých kapitol |
 | Body | 1,6 b za otázku, spolu 80 b |
 | Na zápočet | **aspoň 64 b** (80 %), t. j. najviac 10 chýb |
-| Pomôcky | žiadne, ani papier a pero |
-| Kde | počítačová učebňa FIT, termíny v KOS-e, so sebou preukaz |
+| Pokusy | 2 |
+| Pomôcky | žiadne, ani papier a pero, so sebou študentský preukaz |
+| Výsledok | hneď po odovzdaní |
 
-Zdroj: [fit-wiki BI-ULI](https://fit-wiki.cz/%C5%A1kola/p%C5%99edm%C4%9Bty/bi-uli). Podľa nej ostrý test vyzerá presne
-ako procvičovací test, len má 50 otázok namiesto 70.
+Zdroje: [courses BI-ULI](https://courses.fit.cvut.cz/BI-ULI/classification/index.html) (body, pokusy, pomôcky),
+NetAcad kurz „ULI 2026“ (názov testu, 80 b, 2 pokusy), [fit-wiki BI-ULI](https://fit-wiki.cz/%C5%A1kola/p%C5%99edm%C4%9Bty/bi-uli)
+(50 otázok).
 
-> **Pozor:** nie je overené, že na ostrom teste budú len týchto 70 otázok. Test berie otázky zo všetkých kapitol
-> kurzu Linux Essentials a ich banka je väčšia: zo ~200 otázok, ktoré študenti zozbierali na fit-wiki
-> ([vypracované testy](https://fit-wiki.cz/%C5%A1kola/p%C5%99edm%C4%9Bty/bi-uli/materialy)), je v týchto 70 len 23.
-> Appka ťa naučí témy, na ktoré sa test pýta, ale „Odhad na skúške“ a „Šanca prejsť“ počítajú len s týmito 70
-> otázkami.
+**Sú to práve týchto 70 otázok?** Oficiálne courses hovorí len „náhodně vybrané otázky ze všech kapitol“. Študenti
+na fit-wiki však od roku 2019 zhodne píšu, že ostrý test je výber 50 otázok z poolu 70 a že procvičovací test
+„obsahuje vše co může být v testu“. Tých 70 otázok zároveň pokrýva všetky kapitoly. Istotu na 100 % ti nedá nikto,
+ale všetko nasvedčuje tomu, že áno.
+
+**Prihlás sa vopred.** Na netacad.com si skontroluj, že sa dostaneš do kurzu „ULI 2026“. Podľa Discordu ľudia
+často zistia až pred testom, že nemajú heslo.
 
 ## Pozor na týchto 9 otázok
 
