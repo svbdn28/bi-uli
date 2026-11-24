@@ -95,15 +95,17 @@ kľúča, lebo za ňu dostaneš body, a pri týchto otázkach ťa na rozdiel upo
 
 ## Časté otázky
 
-**Je aj pre iPhone?** Zatiaľ nie, len Android 13 a novší. Celá appka však vznikla z jedného promptu v
-[Claude Code](https://claude.com/claude-code) a [T3 Code](https://t3.codes), takže port na iPhone si spravíš rovnako.
-Naklonuj repo, otvor ho v Claude Code (alebo v T3 Code) a daj mu tento prompt:
+**Je aj pre iPhone?** Áno, ako webová appka (PWA) v priečinku [`docs/`](docs/). Má rovnaké otázky, rovnaké
+učenie aj rovnaké obrazovky a po prvom otvorení funguje bez internetu. Netreba Mac ani App Store.
 
-```text
-Preportuj túto appku na iPhone.
-```
+1. V Safari na iPhone otvor stránku appky (GitHub Pages tohto repa, napr. `https://<účet>.github.io/bi-uli/`).
+2. Ťukni na **Zdieľať** a potom na **Pridať na plochu**.
+3. Spúšťaj ULI z ikony na ploche. Postup sa ukladá len v telefóne.
 
-Keď ti port pôjde, pošli pull request alebo link a pridám ho sem.
+Odstránenie: v appke ťukni na ⋮ a vyber **Odstrániť všetky dáta appky**. Potom podrž ikonu na ploche a vyber
+**Odstrániť záložku** (alebo **Vymazať aplikáciu**).
+
+Pages zapneš v repe cez **Settings → Pages → Deploy from a branch**, vetva s appkou, priečinok `/docs`.
 
 **Potrebuje internet?** Nie. Appka nemá ani povolenie na internet, tvoj postup ostáva len v mobile.
 
@@ -132,6 +134,10 @@ scripts/capture.sh <dir>         # zábery všetkých obrazoviek v oboch témach
 ```
 
 Potrebuješ JDK 21 a Android SDK (compileSdk 37). Debug build (`./gradlew :app:installDebug`) kľúč nepotrebuje.
+
+iPhone verzia (`docs/`) je čisté HTML, CSS a JS bez buildu: `docs/engine.js` je učenie prepísané 1:1 z Kotlinu
+a `docs/app.js` sú obrazovky. Postup je v `localStorage`. `scripts/web.sh` skopíruje `content/questions.json`
+do `docs/` a pustí testy enginu (Node 20+). Po zmene súborov v `docs/` zvýš `VERSION` v `docs/sw.js`.
 
 </details>
 
